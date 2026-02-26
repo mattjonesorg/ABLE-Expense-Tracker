@@ -379,7 +379,7 @@ describe('ExpenseRepository', () => {
         Attributes: makeDynamoItem(updatedExpense),
       });
 
-      await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01');
+      await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01', 'user-alice');
 
       const calls = ddbMock.commandCalls(UpdateCommand);
       expect(calls).toHaveLength(1);
@@ -403,7 +403,7 @@ describe('ExpenseRepository', () => {
         Attributes: makeDynamoItem(updatedExpense),
       });
 
-      await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01');
+      await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01', 'user-alice');
 
       const calls = ddbMock.commandCalls(UpdateCommand);
       const updateInput = calls[0].args[0].input;
@@ -429,7 +429,7 @@ describe('ExpenseRepository', () => {
         Attributes: makeDynamoItem(updatedExpense),
       });
 
-      await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01');
+      await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01', 'user-alice');
 
       const calls = ddbMock.commandCalls(UpdateCommand);
       const updateInput = calls[0].args[0].input;
@@ -438,6 +438,29 @@ describe('ExpenseRepository', () => {
       // We use an expression attribute name (#gsi2sk) since GSI2SK could be reserved
       expect(updateInput.UpdateExpression).toContain('#gsi2sk');
       expect(updateInput.ExpressionAttributeNames?.['#gsi2sk']).toBe('GSI2SK');
+    });
+
+    it('sets GSI2SK using paidBy (not expenseId) — fixes #44', async () => {
+      // This test ensures GSI2SK format is PAID#<paidBy>#1#<date>,
+      // NOT PAID#<expenseId>#1#<date> (the bug from issue #44).
+      const updatedExpense = makeSampleExpense({
+        paidBy: 'user-bob',
+        reimbursed: true,
+        reimbursedAt: '2025-03-15T10:00:00.000Z',
+        updatedAt: '2025-03-15T10:00:00.000Z',
+      });
+
+      ddbMock.on(UpdateCommand).resolves({
+        Attributes: makeDynamoItem(updatedExpense),
+      });
+
+      await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01', 'user-bob');
+
+      const calls = ddbMock.commandCalls(UpdateCommand);
+      const updateInput = calls[0].args[0].input;
+
+      // GSI2SK must use paidBy, NOT expenseId
+      expect(updateInput.ExpressionAttributeValues?.[':gsi2sk']).toBe('PAID#user-bob#1#2025-03-15');
     });
 
     it('returns the updated expense', async () => {
@@ -451,7 +474,7 @@ describe('ExpenseRepository', () => {
         Attributes: makeDynamoItem(updatedExpense),
       });
 
-      const result = await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01');
+      const result = await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01', 'user-alice');
       expect(result.reimbursed).toBe(true);
       expect(result.reimbursedAt).toBe('2025-03-15T10:00:00.000Z');
     });
@@ -466,7 +489,7 @@ describe('ExpenseRepository', () => {
         Attributes: makeDynamoItem(updatedExpense),
       });
 
-      await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01');
+      await repo.markReimbursed('acct-123', 'MOCK_ULID_01', 'EXP#2025-03-15#MOCK_ULID_01', 'user-alice');
 
       const calls = ddbMock.commandCalls(UpdateCommand);
       expect(calls[0].args[0].input.ReturnValues).toBe('ALL_NEW');
