@@ -1,0 +1,11 @@
+node_modules
+cdk.out
+dist
+.env
+.env.*
+coverage
+*.js.map
+.vite
+*.d.ts
+!src/**/*.d.ts
+.claude-setup
