@@ -2,6 +2,15 @@ name: Deploy Infrastructure
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'infra/**'
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   deploy:
@@ -22,19 +31,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # TODO: Configure AWS credentials
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-      #     aws-region: ${{ vars.AWS_REGION }}
+      - name: Build infra
+        working-directory: infra
+        run: npx tsc
 
-      # TODO: Run CDK diff to preview changes
-      # - name: CDK diff
-      #   working-directory: infra
-      #   run: npx cdk diff --all
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
 
-      # TODO: Deploy all stacks
-      # - name: CDK deploy
-      #   working-directory: infra
-      #   run: npx cdk deploy --all --require-approval never
+      - name: CDK diff
+        working-directory: infra
+        run: npx cdk diff --all
+
+      - name: CDK deploy
+        working-directory: infra
+        run: npx cdk deploy --all --require-approval never
