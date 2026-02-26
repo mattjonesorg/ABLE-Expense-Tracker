@@ -108,13 +108,13 @@ This project uses a 12-agent team. See `.claude/agents/` for individual agent de
 |-------|----------------------|-------------|
 | Scrum Master | Orchestration, sprint planning, workflow | Sprint ceremonies, agent coordination |
 | Product Owner | Backlog prioritization, acceptance criteria | GitHub issues, requirements |
-| Senior Architect | System design, technical decisions | Architecture docs, cross-cutting concerns |
+| Senior Architect | System design, technical decisions, **plans L/XL features** (does not implement) | Architecture docs, cross-cutting concerns |
 | Frontend Engineer | React PWA, Mantine UI | `web/` |
 | Backend Engineer | Lambda handlers, DynamoDB, Claude integration | `api/` |
 | DevOps Engineer | CDK infrastructure, CI/CD pipelines | `infra/`, `.github/workflows/` |
-| QA Engineer | Test strategy, test implementation, coverage | `**/test/`, test utilities |
+| QA Engineer | Test strategy, coverage, **pre-commit review gate** | `**/test/`, test utilities |
 | UAT Tester | User advocacy, demo scripts, acceptance testing | `docs/demos/`, acceptance criteria verification |
-| Security Reviewer | Auth, data protection, IAM, PII review | Security-sensitive code across all packages |
+| Security Reviewer | Auth, data protection, IAM, PII, **pre-commit review gate** | Security-sensitive code across all packages |
 | Technical Writer | Documentation quality and completeness | `docs/`, `README.md`, inline docs |
 | Code Reviewer | Engineering standards enforcement | PR reviews, code quality gates |
 | Accessibility Engineer | WCAG compliance, keyboard nav, screen readers | Accessibility across `web/` |
@@ -123,22 +123,27 @@ This project uses a 12-agent team. See `.claude/agents/` for individual agent de
 
 ### Sprint Cycle
 
-1. **Sprint Planning**: Scrum Master facilitates. Product Owner presents prioritized issues. Team estimates and commits.
-2. **Development**: Agents work on assigned issues following TDD. Backend and Frontend can work in parallel on agreed interfaces.
-3. **Review**: Code Reviewer and Security Reviewer inspect changes. QA Engineer verifies tests.
-4. **Acceptance**: UAT Tester runs demo script. Accessibility Engineer verifies. Product Owner accepts or rejects.
-5. **Retrospective**: Scrum Master facilitates. What worked? What didn't? Improve the process.
+1. **Sprint Planning**: Scrum Master facilitates. Product Owner presents prioritized issues. Team estimates and commits. **L/XL issues go to the Architect for planning first.**
+2. **Architecture Planning** (L/XL only): Senior Architect produces implementation plan (API contracts, data model, component breakdown, test strategy). Architect does NOT implement.
+3. **Development**: Implementing agents work on assigned issues following TDD. Backend and Frontend can work in parallel on agreed interfaces.
+4. **Pre-Commit Review Gate**: Before any implementation is committed, **both** Security Reviewer and QA Engineer must review and approve. CRITICAL/HIGH findings block the commit.
+5. **Sprint-End UAT Review**: UAT Tester reviews ALL completed stories from the user's perspective and submits a Sprint UAT Report. Accessibility Engineer verifies UI stories.
+6. **Product Owner Triage**: Product Owner triages UAT findings — **blockers** must be fixed before sprint release, other findings go to backlog.
+7. **Retrospective**: Scrum Master facilitates. What worked? What didn't? Improve the process.
 
 ### Definition of Done
 
 An issue is done when ALL of the following are true:
+- [ ] Architect plan complete (L/XL issues only)
 - [ ] Tests written first and passing
 - [ ] Implementation complete and TypeScript strict-clean
+- [ ] **Security Reviewer approves** (mandatory for ALL implementations — pre-commit gate)
+- [ ] **QA Engineer approves** (mandatory for ALL implementations — pre-commit gate)
 - [ ] CI pipeline passes
 - [ ] Code Reviewer approves (no `any`, no skipped tests, conventions followed)
-- [ ] Security Reviewer approves (if auth/data/IAM touched)
 - [ ] Accessibility Engineer approves (if UI touched)
-- [ ] UAT Tester demo script passes
+- [ ] UAT Tester sprint-end review passes (no unresolved blockers)
+- [ ] Product Owner triages UAT findings (blockers fixed, others backlogged)
 - [ ] Technical Writer updates relevant docs
 - [ ] Product Owner accepts
 
