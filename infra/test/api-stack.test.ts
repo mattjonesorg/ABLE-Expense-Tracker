@@ -16,6 +16,7 @@ describe('ApiStack', () => {
     // Create dependency stacks with real resources for cross-stack references
     const authStack = new cdk.Stack(app, 'TestAuthStack');
     const userPool = new cognito.UserPool(authStack, 'UserPool');
+    const userPoolClient = userPool.addClient('TestClient');
 
     const dataStack = new cdk.Stack(app, 'TestDataStack');
     const table = new dynamodb.Table(dataStack, 'Table', {
@@ -26,6 +27,7 @@ describe('ApiStack', () => {
 
     const props: ApiStackProps = {
       userPool,
+      userPoolClient,
       table,
       bucket,
     };
@@ -43,6 +45,38 @@ describe('ApiStack', () => {
       template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
         ProtocolType: 'HTTP',
       });
+    });
+  });
+
+  describe('JWT Authorizer', () => {
+    it('creates a JWT authorizer for the HTTP API', () => {
+      template.resourceCountIs('AWS::ApiGatewayV2::Authorizer', 1);
+    });
+
+    it('configures the authorizer as JWT type', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Authorizer', {
+        AuthorizerType: 'JWT',
+      });
+    });
+
+    it('configures the authorizer with Cognito JWT configuration', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Authorizer', {
+        JwtConfiguration: Match.objectLike({
+          Audience: Match.anyValue(),
+          Issuer: Match.anyValue(),
+        }),
+      });
+    });
+
+    it('attaches authorization to all routes', () => {
+      const routes = template.findResources('AWS::ApiGatewayV2::Route');
+      const routeKeys = Object.keys(routes);
+      expect(routeKeys.length).toBe(7);
+
+      for (const key of routeKeys) {
+        expect(routes[key].Properties.AuthorizationType).toBe('JWT');
+        expect(routes[key].Properties.AuthorizerId).toBeDefined();
+      }
     });
   });
 

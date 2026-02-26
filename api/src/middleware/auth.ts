@@ -40,6 +40,11 @@ export type AuthResult =
   | { success: false; response: APIGatewayProxyResultV2 };
 
 /**
+ * Valid role values for ABLE Tracker users.
+ */
+const VALID_ROLES: ReadonlySet<string> = new Set(['owner', 'authorized_rep']);
+
+/**
  * Build a standardized 401 error response.
  */
 function unauthorized(error: string): AuthResult {
@@ -51,6 +56,22 @@ function unauthorized(error: string): AuthResult {
         'content-type': 'application/json',
       },
       body: JSON.stringify({ error, code: 'UNAUTHORIZED' }),
+    },
+  };
+}
+
+/**
+ * Build a standardized 403 error response.
+ */
+function forbidden(error: string): AuthResult {
+  return {
+    success: false,
+    response: {
+      statusCode: 403,
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ error, code: 'FORBIDDEN' }),
     },
   };
 }
@@ -91,12 +112,24 @@ export function createAuthMiddleware(
     try {
       const claims = await verifyToken(token);
 
+      // Validate role claim is present and valid
+      const role = claims['custom:role'];
+      if (!role || !VALID_ROLES.has(role)) {
+        return forbidden('Invalid role claim');
+      }
+
+      // Validate accountId claim is present and non-empty
+      const accountId = claims['custom:accountId'];
+      if (!accountId) {
+        return forbidden('Missing accountId claim');
+      }
+
       const context: AuthContext = {
         userId: claims.sub,
-        accountId: claims['custom:accountId'],
+        accountId,
         email: claims.email,
         displayName: claims['custom:displayName'],
-        role: claims['custom:role'] as AuthContext['role'],
+        role: role as AuthContext['role'],
       };
 
       return { success: true, context };
