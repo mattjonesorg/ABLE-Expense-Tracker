@@ -3,6 +3,7 @@ cdk.out
 dist
 .env
 .env.*
+!.env.deploy.example
 coverage
 *.js.map
 .vite
@@ -15,3 +16,7 @@ credentials.json
 *.pem
 *.key
 cdk.context.json
+
+# Environment-specific deployment config (domains, hosted zones, account IDs)
+# Copy .env.deploy.example to .env.deploy and fill in your values
+.env.deploy

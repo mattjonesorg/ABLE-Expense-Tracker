@@ -129,6 +129,8 @@ The hook blocks commits that contain:
 - **Generic secrets** (`api_key`, `password`, `token`, `secret_key`, `private_key` assigned string values)
 - **Private keys** (`-----BEGIN RSA PRIVATE KEY-----`, etc.)
 - **AWS Account IDs in ARNs** (real 12-digit account IDs in `arn:aws:...` strings)
+- **Route53 hosted zone IDs** (e.g., `hostedZoneId = "Z..."`)
+- **ACM certificate ARNs** (e.g., `certificateArn = "arn:aws:acm:..."`)
 - **Hardcoded AWS account IDs** (`account` variable set to a 12-digit number)
 
 ### Known-safe patterns (not blocked)
@@ -142,6 +144,17 @@ The hook allows these patterns through without flagging:
 - Environment variable references (`process.env.`, `os.environ`, etc.)
 - Type definitions and interfaces
 - The hook scripts themselves (`.claude/hooks/check-secrets.sh` and `.claude/hooks/test-check-secrets.sh`)
+- The `.env.deploy.example` template file (contains empty placeholders, not real values)
+
+### Deployment Configuration
+
+Environment-specific values (AWS account IDs, custom domains, hosted zone IDs, certificate ARNs) are **never committed**. Instead:
+
+1. `.env.deploy.example` is committed as a template showing which values are needed
+2. Contributors copy it to `.env.deploy` and fill in their own values
+3. `.env.deploy` is in `.gitignore` and will never be committed
+
+This ensures anyone can fork the repo and deploy it to their own AWS account without needing to modify tracked files.
 
 ### Handling false positives
 

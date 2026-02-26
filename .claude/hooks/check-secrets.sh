@@ -9,6 +9,8 @@
 #   - Private keys (RSA, EC, DSA, OPENSSH)
 #   - AWS Account IDs in ARNs (real 12-digit account IDs)
 #   - Hardcoded AWS account IDs
+#   - Route53 hosted zone IDs
+#   - Hardcoded domain names in deployment config
 #
 # Known-safe patterns are allowed:
 #   - Placeholder account ID 123456789012
@@ -160,7 +162,53 @@ scan_file() {
       add_violation "$file" "$line_num" "AWS Account ID in ARN" "$line"
     fi
 
-    # --- Pattern 7: Hardcoded AWS account IDs ---
+    # --- Pattern 7: Route53 Hosted Zone IDs ---
+    if echo "$line" | grep -qiE '(hosted_?zone_?id|hostedZoneId|hosted_zone)\s*[:=]\s*['\''"]?Z[A-Z0-9]{8,32}['\''"]?'; then
+      # Allow CDK tokens
+      if echo "$line" | grep -qE '\$\{Token\['; then
+        continue
+      fi
+      # Allow if clearly a test/mock/example
+      local hz_before
+      hz_before=$(echo "$line" | sed -E "s/[:=]\s*['\"]?Z[A-Z0-9]{8,32}.*//" )
+      if echo "$hz_before" | grep -qiE '\b(mock|fake|test|dummy|example|placeholder)\b'; then
+        continue
+      fi
+      # Allow the hook scripts themselves
+      if [ "$file" = ".claude/hooks/check-secrets.sh" ] || [ "$file" = ".claude/hooks/test-check-secrets.sh" ]; then
+        continue
+      fi
+      # Allow .env.deploy.example (template file)
+      if [ "$file" = ".env.deploy.example" ]; then
+        continue
+      fi
+      add_violation "$file" "$line_num" "Route53 Hosted Zone ID" "$line"
+    fi
+
+    # --- Pattern 8: Hardcoded ACM certificate ARNs ---
+    if echo "$line" | grep -qiE '(certificate_?arn|certificateArn)\s*[:=]\s*['\''"]?arn:aws:acm:'; then
+      # Allow CDK tokens
+      if echo "$line" | grep -qE '\$\{Token\['; then
+        continue
+      fi
+      # Allow placeholder account IDs
+      if echo "$line" | grep -qE '123456789012'; then
+        continue
+      fi
+      # Allow if clearly a test/mock/example
+      local cert_before
+      cert_before=$(echo "$line" | sed -E "s/[:=]\s*['\"]?arn:aws:acm:.*//" )
+      if echo "$cert_before" | grep -qiE '\b(mock|fake|test|dummy|example|placeholder)\b'; then
+        continue
+      fi
+      # Allow the hook scripts themselves
+      if [ "$file" = ".claude/hooks/check-secrets.sh" ] || [ "$file" = ".claude/hooks/test-check-secrets.sh" ]; then
+        continue
+      fi
+      add_violation "$file" "$line_num" "Hardcoded ACM Certificate ARN" "$line"
+    fi
+
+    # --- Pattern 9: Hardcoded AWS account IDs ---
     if echo "$line" | grep -qiE 'account.{0,10}[:=]\s*['\''"]?[0-9]{12}['\''"]?'; then
       # Allow placeholder account ID 123456789012
       if echo "$line" | grep -qE '123456789012'; then
