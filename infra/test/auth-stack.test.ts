@@ -33,11 +33,35 @@ describe('AuthStack', () => {
       });
     });
 
-    it('has self-sign-up enabled', () => {
+    it('disables self-signup (admin-created users only)', () => {
       template.hasResourceProperties('AWS::Cognito::UserPool', {
         AdminCreateUserConfig: {
-          AllowAdminCreateUserOnly: false,
+          AllowAdminCreateUserOnly: true,
         },
+      });
+    });
+
+    it('defines custom:role string attribute in schema', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPool', {
+        Schema: Match.arrayWith([
+          Match.objectLike({
+            Name: 'role',
+            AttributeDataType: 'String',
+            Mutable: true,
+          }),
+        ]),
+      });
+    });
+
+    it('defines custom:accountId string attribute in schema', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPool', {
+        Schema: Match.arrayWith([
+          Match.objectLike({
+            Name: 'accountId',
+            AttributeDataType: 'String',
+            Mutable: true,
+          }),
+        ]),
       });
     });
   });
@@ -56,6 +80,36 @@ describe('AuthStack', () => {
     it('has no client secret (for SPA usage)', () => {
       template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
         GenerateSecret: false,
+      });
+    });
+
+    it('does not allow clients to write custom:role attribute', () => {
+      // WriteAttributes should NOT include custom:role
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        WriteAttributes: Match.not(
+          Match.arrayWith(['custom:role']),
+        ),
+      });
+    });
+
+    it('does not allow clients to write custom:accountId attribute', () => {
+      // WriteAttributes should NOT include custom:accountId
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        WriteAttributes: Match.not(
+          Match.arrayWith(['custom:accountId']),
+        ),
+      });
+    });
+
+    it('allows clients to read custom:role attribute', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        ReadAttributes: Match.arrayWith(['custom:role']),
+      });
+    });
+
+    it('allows clients to read custom:accountId attribute', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        ReadAttributes: Match.arrayWith(['custom:accountId']),
       });
     });
   });

@@ -10,7 +10,7 @@ export class AuthStack extends cdk.Stack {
     super(scope, id, props);
 
     this.userPool = new cognito.UserPool(this, 'UserPool', {
-      selfSignUpEnabled: true,
+      selfSignUpEnabled: false,
       signInAliases: {
         email: true,
       },
@@ -24,6 +24,10 @@ export class AuthStack extends cdk.Stack {
         requireDigits: true,
         requireSymbols: true,
       },
+      customAttributes: {
+        role: new cognito.StringAttribute({ mutable: true }),
+        accountId: new cognito.StringAttribute({ mutable: true }),
+      },
       removalPolicy: cdk.RemovalPolicy.RETAIN,
     });
 
@@ -34,6 +38,16 @@ export class AuthStack extends cdk.Stack {
         userPassword: true,
         userSrp: true,
       },
+      readAttributes: new cognito.ClientAttributes()
+        .withStandardAttributes({
+          email: true,
+          emailVerified: true,
+        })
+        .withCustomAttributes('role', 'accountId'),
+      writeAttributes: new cognito.ClientAttributes()
+        .withStandardAttributes({
+          email: true,
+        }),
     });
 
     new cdk.CfnOutput(this, 'UserPoolId', {
