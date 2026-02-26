@@ -124,7 +124,8 @@ describe('createAuthMiddleware', () => {
       expect(response.statusCode).toBe(401);
 
       const body = JSON.parse(response.body as string) as { error: string; code: string };
-      expect(body.error).toBe('Missing Authorization header');
+      // #43: Generic error message
+      expect(body.error).toBe('Unauthorized');
       expect(body.code).toBe('UNAUTHORIZED');
     });
   });
@@ -144,7 +145,8 @@ describe('createAuthMiddleware', () => {
       expect(response.statusCode).toBe(401);
 
       const body = JSON.parse(response.body as string) as { error: string; code: string };
-      expect(body.error).toBe('Invalid Authorization header format');
+      // #43: Generic error message
+      expect(body.error).toBe('Unauthorized');
       expect(body.code).toBe('UNAUTHORIZED');
     });
 
@@ -162,7 +164,8 @@ describe('createAuthMiddleware', () => {
       expect(response.statusCode).toBe(401);
 
       const body = JSON.parse(response.body as string) as { error: string; code: string };
-      expect(body.error).toBe('Invalid Authorization header format');
+      // #43: Generic error message
+      expect(body.error).toBe('Unauthorized');
       expect(body.code).toBe('UNAUTHORIZED');
     });
 
@@ -193,7 +196,8 @@ describe('createAuthMiddleware', () => {
       expect(response.statusCode).toBe(401);
 
       const body = JSON.parse(response.body as string) as { error: string; code: string };
-      expect(body.error).toBe('Token expired');
+      // #43: Generic error message — must NOT leak "Token expired"
+      expect(body.error).toBe('Unauthorized');
       expect(body.code).toBe('UNAUTHORIZED');
     });
   });
@@ -213,7 +217,121 @@ describe('createAuthMiddleware', () => {
       expect(response.statusCode).toBe(401);
 
       const body = JSON.parse(response.body as string) as { error: string; code: string };
-      expect(body.error).toBe('Invalid token signature');
+      // #43: Generic error message — must NOT leak "Invalid token signature"
+      expect(body.error).toBe('Unauthorized');
+      expect(body.code).toBe('UNAUTHORIZED');
+    });
+  });
+
+  describe('generic auth error messages (#43)', () => {
+    it('returns generic "Unauthorized" for all token verification failures', async () => {
+      const verifier = vi.fn<TokenVerifier>().mockRejectedValue(new Error('jwt malformed: unexpected payload'));
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer bad-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+
+      const body = JSON.parse(response.body as string) as { error: string; code: string };
+      expect(body.error).toBe('Unauthorized');
+      expect(body.error).not.toContain('jwt');
+      expect(body.error).not.toContain('malformed');
+      expect(body.code).toBe('UNAUTHORIZED');
+    });
+
+    it('returns generic "Unauthorized" even when verifier throws non-Error', async () => {
+      const verifier = vi.fn<TokenVerifier>().mockRejectedValue('string-error');
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer some-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      const body = JSON.parse(response.body as string) as { error: string; code: string };
+
+      expect(body.error).toBe('Unauthorized');
+      expect(body.code).toBe('UNAUTHORIZED');
+    });
+
+    it('returns generic "Forbidden" for invalid role (not specific claim details)', async () => {
+      const claimsWithBadRole: TokenClaims = {
+        ...validClaims,
+        'custom:role': 'admin',
+      };
+      const verifier = vi.fn<TokenVerifier>().mockResolvedValue(claimsWithBadRole);
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer valid-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(403);
+
+      const body = JSON.parse(response.body as string) as { error: string; code: string };
+      expect(body.error).toBe('Forbidden');
+      expect(body.error).not.toContain('role');
+      expect(body.error).not.toContain('claim');
+      expect(body.code).toBe('FORBIDDEN');
+    });
+
+    it('returns generic "Forbidden" for missing accountId (not specific claim details)', async () => {
+      const claimsWithoutAccountId: TokenClaims = {
+        ...validClaims,
+        'custom:accountId': '',
+      };
+      const verifier = vi.fn<TokenVerifier>().mockResolvedValue(claimsWithoutAccountId);
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer valid-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(403);
+
+      const body = JSON.parse(response.body as string) as { error: string; code: string };
+      expect(body.error).toBe('Forbidden');
+      expect(body.error).not.toContain('accountId');
+      expect(body.error).not.toContain('claim');
+      expect(body.code).toBe('FORBIDDEN');
+    });
+
+    it('returns generic "Unauthorized" for missing Authorization header', async () => {
+      const verifier = vi.fn<TokenVerifier>();
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({});
+      const result = await middleware(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+
+      const body = JSON.parse(response.body as string) as { error: string; code: string };
+      expect(body.error).toBe('Unauthorized');
+      expect(body.error).not.toContain('header');
+      expect(body.code).toBe('UNAUTHORIZED');
+    });
+
+    it('returns generic "Unauthorized" for malformed Authorization header', async () => {
+      const verifier = vi.fn<TokenVerifier>();
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Basic abc123' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+
+      const body = JSON.parse(response.body as string) as { error: string; code: string };
+      expect(body.error).toBe('Unauthorized');
+      expect(body.error).not.toContain('format');
       expect(body.code).toBe('UNAUTHORIZED');
     });
   });
@@ -258,7 +376,8 @@ describe('createAuthMiddleware', () => {
       const response = (result as Extract<AuthResult, { success: false }>).response;
       const body = JSON.parse(response.body as string) as { error: string; code: string };
 
-      expect(body.error).toBe('Token verification failed');
+      // #43: All auth errors now use generic "Unauthorized"
+      expect(body.error).toBe('Unauthorized');
       expect(body.code).toBe('UNAUTHORIZED');
     });
   });
@@ -299,7 +418,8 @@ describe('createAuthMiddleware', () => {
       expect(response.statusCode).toBe(403);
 
       const body = JSON.parse(response.body as string) as { error: string; code: string };
-      expect(body.error).toBe('Invalid role claim');
+      // #43: Generic error message — must NOT leak "Invalid role claim"
+      expect(body.error).toBe('Forbidden');
       expect(body.code).toBe('FORBIDDEN');
     });
   });
@@ -321,7 +441,8 @@ describe('createAuthMiddleware', () => {
       expect(response.statusCode).toBe(403);
 
       const body = JSON.parse(response.body as string) as { error: string; code: string };
-      expect(body.error).toBe('Missing accountId claim');
+      // #43: Generic error message — must NOT leak "Missing accountId claim"
+      expect(body.error).toBe('Forbidden');
       expect(body.code).toBe('FORBIDDEN');
     });
   });
