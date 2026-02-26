@@ -1,9 +1,12 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './lib/auth';
+import { AppLayout } from './components/AppShell';
 import { Login } from './pages/Login';
+import { Dashboard } from './pages/Dashboard';
+import { Expenses } from './pages/Expenses';
 
-function Placeholder({ name }: { name: string }) {
-  return <div>{name}</div>;
+function NewExpensePlaceholder() {
+  return <div>New Expense</div>;
 }
 
 export function App() {
@@ -11,14 +14,18 @@ export function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Placeholder name="Home" />} />
+          {/* Login page — no AppShell wrapper */}
           <Route path="/login" element={<Login />} />
-          <Route path="/expenses" element={<Placeholder name="Expenses" />} />
-          <Route
-            path="/expenses/new"
-            element={<Placeholder name="New Expense" />}
-          />
-          <Route path="/settings" element={<Placeholder name="Settings" />} />
+
+          {/* Protected routes — wrapped in AppShell */}
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/expenses" element={<Expenses />} />
+            <Route path="/expenses/new" element={<NewExpensePlaceholder />} />
+          </Route>
+
+          {/* Catch-all redirect */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
