@@ -378,4 +378,196 @@ describe('createCreateExpenseHandler', () => {
       expect(mockRepo.createExpense).not.toHaveBeenCalled();
     });
   });
+
+  describe('validation — input length limits (#41)', () => {
+    beforeEach(() => {
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+    });
+
+    it('rejects vendor longer than 200 characters with 400', async () => {
+      const body = makeValidBody({ vendor: 'A'.repeat(201) });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('VALIDATION_ERROR');
+      expect(responseBody.error).toMatch(/vendor/i);
+      expect(responseBody.error).toMatch(/200/);
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('accepts vendor exactly 200 characters', async () => {
+      const body = makeValidBody({ vendor: 'A'.repeat(200) });
+      mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>
+        Promise.resolve(makeMockExpense(input)),
+      );
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+    });
+
+    it('rejects description longer than 1000 characters with 400', async () => {
+      const body = makeValidBody({ description: 'B'.repeat(1001) });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('VALIDATION_ERROR');
+      expect(responseBody.error).toMatch(/description/i);
+      expect(responseBody.error).toMatch(/1000/);
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('accepts description exactly 1000 characters', async () => {
+      const body = makeValidBody({ description: 'B'.repeat(1000) });
+      mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>
+        Promise.resolve(makeMockExpense(input)),
+      );
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+    });
+
+    it('rejects category longer than 100 characters with 400', async () => {
+      const body = makeValidBody({ category: 'C'.repeat(101) });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('VALIDATION_ERROR');
+      expect(responseBody.error).toMatch(/category/i);
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('rejects paidBy longer than 100 characters with 400', async () => {
+      const body = makeValidBody({ paidBy: 'D'.repeat(101) });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('VALIDATION_ERROR');
+      expect(responseBody.error).toMatch(/paidBy/i);
+      expect(responseBody.error).toMatch(/100/);
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('accepts paidBy exactly 100 characters', async () => {
+      const body = makeValidBody({ paidBy: 'D'.repeat(100) });
+      mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>
+        Promise.resolve(makeMockExpense(input)),
+      );
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+    });
+
+    it('rejects receiptKey longer than 500 characters with 400', async () => {
+      const body = makeValidBody({
+        receiptKey: 'receipts/acct_01HXYZ/' + 'E'.repeat(481),
+      });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('VALIDATION_ERROR');
+      expect(responseBody.error).toMatch(/receiptKey/i);
+      expect(responseBody.error).toMatch(/500/);
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('accepts receiptKey exactly 500 characters', async () => {
+      // Build a key that is exactly 500 chars and starts with correct prefix
+      const prefix = 'receipts/acct_01HXYZ/';
+      const body = makeValidBody({
+        receiptKey: prefix + 'F'.repeat(500 - prefix.length),
+      });
+      mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>
+        Promise.resolve(makeMockExpense(input)),
+      );
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+    });
+
+    it('does not apply receiptKey length limit when receiptKey is null', async () => {
+      const body = makeValidBody({ receiptKey: null });
+      mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>
+        Promise.resolve(makeMockExpense(input)),
+      );
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+    });
+  });
+
 });

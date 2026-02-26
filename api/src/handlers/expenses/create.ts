@@ -34,6 +34,16 @@ interface CreateExpenseRequestBody {
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
+ * Maximum allowed lengths for string input fields.
+ * Prevents abuse via excessively long payloads (#41).
+ */
+const MAX_VENDOR_LENGTH = 200;
+const MAX_DESCRIPTION_LENGTH = 1000;
+const MAX_CATEGORY_LENGTH = 100;
+const MAX_PAID_BY_LENGTH = 100;
+const MAX_RECEIPT_KEY_LENGTH = 500;
+
+/**
  * Build a JSON error response with the ApiError format.
  */
 function errorResponse(statusCode: number, error: string, code: string): APIGatewayProxyResultV2 {
@@ -86,6 +96,11 @@ function validateBody(
     return { valid: false, error: 'vendor is required' };
   }
 
+  // Input length limits (#41)
+  if ((body['vendor'] as string).length > MAX_VENDOR_LENGTH) {
+    return { valid: false, error: `vendor must not exceed ${MAX_VENDOR_LENGTH} characters` };
+  }
+
   if (typeof body['date'] !== 'string' || body['date'].trim().length === 0) {
     return { valid: false, error: 'date is required' };
   }
@@ -122,9 +137,27 @@ function validateBody(
 
   // Category validation (optional but if provided must be valid)
   if (body['category'] !== undefined) {
+    if (typeof body['category'] === 'string' && body['category'].length > MAX_CATEGORY_LENGTH) {
+      return { valid: false, error: `category must not exceed ${MAX_CATEGORY_LENGTH} characters` };
+    }
     if (!(ABLE_CATEGORIES as readonly string[]).includes(body['category'] as string)) {
       return { valid: false, error: 'category must be a valid ABLE category' };
     }
+  }
+
+  // Description length limit (#41)
+  if (typeof body['description'] === 'string' && body['description'].length > MAX_DESCRIPTION_LENGTH) {
+    return { valid: false, error: `description must not exceed ${MAX_DESCRIPTION_LENGTH} characters` };
+  }
+
+  // paidBy length limit (#41)
+  if (typeof body['paidBy'] === 'string' && body['paidBy'].length > MAX_PAID_BY_LENGTH) {
+    return { valid: false, error: `paidBy must not exceed ${MAX_PAID_BY_LENGTH} characters` };
+  }
+
+  // receiptKey length limit (#41)
+  if (typeof body['receiptKey'] === 'string' && body['receiptKey'].length > MAX_RECEIPT_KEY_LENGTH) {
+    return { valid: false, error: `receiptKey must not exceed ${MAX_RECEIPT_KEY_LENGTH} characters` };
   }
 
   return {
