@@ -177,10 +177,10 @@ export class ExpenseRepository {
    * Mark an expense as reimbursed.
    * Updates reimbursed, reimbursedAt, updatedAt, and GSI2SK (to reflect the new status in the index).
    */
-  async markReimbursed(accountId: string, expenseId: string, sk: string): Promise<Expense> {
+  async markReimbursed(accountId: string, expenseId: string, sk: string, paidBy: string): Promise<Expense> {
     const now = new Date().toISOString();
 
-    // Extract date and paidBy from the SK to reconstruct GSI2SK
+    // Extract date from the SK to reconstruct GSI2SK
     // SK format: EXP#<date>#<expenseId>
     const skParts = sk.split('#');
     const date = skParts[1];
@@ -200,7 +200,7 @@ export class ExpenseRepository {
           ':reimbursed': true,
           ':reimbursedAt': now,
           ':updatedAt': now,
-          ':gsi2sk': `PAID#${expenseId}#1#${date}`,
+          ':gsi2sk': `PAID#${paidBy}#1#${date}`,
         },
         ReturnValues: 'ALL_NEW',
       }),
