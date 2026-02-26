@@ -115,6 +115,50 @@ PR title should follow the same conventional commit format as commit messages.
 - Shared types live in `api/src/lib/types.ts` and are mirrored in `web/src/lib/types.ts`
 - Prefer interfaces for object shapes, type aliases for unions and utility types
 
+## Secrets Prevention Hook
+
+This project includes an automated pre-commit hook that scans staged files for secrets and sensitive data before every commit. The hook is configured as a Claude Code PreCommit hook in `.claude/settings.json` and runs `.claude/hooks/check-secrets.sh`.
+
+### What it catches
+
+The hook blocks commits that contain:
+
+- **AWS Access Key IDs** (`AKIA...` pattern)
+- **AWS Secret Access Keys** (40-character keys preceded by `secret`, `aws_secret`, etc.)
+- **Anthropic API keys** (`sk-ant-...` pattern)
+- **Generic secrets** (`api_key`, `password`, `token`, `secret_key`, `private_key` assigned string values)
+- **Private keys** (`-----BEGIN RSA PRIVATE KEY-----`, etc.)
+- **AWS Account IDs in ARNs** (real 12-digit account IDs in `arn:aws:...` strings)
+- **Hardcoded AWS account IDs** (`account` variable set to a 12-digit number)
+
+### Known-safe patterns (not blocked)
+
+The hook allows these patterns through without flagging:
+
+- The placeholder AWS account ID `123456789012` (commonly used in docs and tests)
+- CDK token references like `${Token[...]}`
+- Lines where the variable name contains `mock`, `fake`, `test`, `dummy`, `example`, or `placeholder`
+- Values that start with `mock`, `fake`, `test`, `example`, `placeholder`, `changeme`, or `TODO`
+- Environment variable references (`process.env.`, `os.environ`, etc.)
+- Type definitions and interfaces
+- The hook scripts themselves (`.claude/hooks/check-secrets.sh` and `.claude/hooks/test-check-secrets.sh`)
+
+### Handling false positives
+
+If the hook blocks a commit that does not contain a real secret, you can resolve it by:
+
+1. **Move the value to an environment variable** -- this is always the safest option
+2. **Use a placeholder value** -- e.g., `123456789012` for AWS account IDs
+3. **Add a keyword to the line** -- include `mock`, `fake`, `test`, `example`, or `placeholder` in the variable name or a comment on the same line
+
+### Running the tests
+
+You can verify the hook works correctly by running the test suite:
+
+```bash
+bash .claude/hooks/test-check-secrets.sh
+```
+
 ## Questions?
 
 Open an issue with the `question` label or start a discussion.

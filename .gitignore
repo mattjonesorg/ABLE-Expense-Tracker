@@ -9,3 +9,9 @@ coverage
 *.d.ts
 !src/**/*.d.ts
 .claude-setup
+
+# Secrets and sensitive files
+credentials.json
+*.pem
+*.key
+cdk.context.json
