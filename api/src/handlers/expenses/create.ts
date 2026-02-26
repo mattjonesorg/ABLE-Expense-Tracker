@@ -209,6 +209,17 @@ export function createCreateExpenseHandler(deps: CreateHandlerDeps) {
 
     const { data } = validation;
 
+    // 3b. Validate receiptKey is scoped to the user's account (#42)
+    if (data.receiptKey !== null) {
+      const expectedPrefix = `receipts/${context.accountId}/`;
+      if (
+        !data.receiptKey.startsWith(expectedPrefix) ||
+        data.receiptKey.includes('..')
+      ) {
+        return errorResponse(403, 'receiptKey must reference your own account', 'FORBIDDEN');
+      }
+    }
+
     // 4. Build the CreateExpenseInput with auth-derived fields
     const input: CreateExpenseInput = {
       accountId: context.accountId,

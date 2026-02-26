@@ -570,4 +570,103 @@ describe('createCreateExpenseHandler', () => {
     });
   });
 
+  describe('validation — receiptKey scoping (#42)', () => {
+    beforeEach(() => {
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+    });
+
+    it('accepts receiptKey scoped to the authenticated user account', async () => {
+      const body = makeValidBody({
+        receiptKey: 'receipts/acct_01HXYZ/01HRECEIPT123.jpg',
+      });
+      mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>
+        Promise.resolve(makeMockExpense(input)),
+      );
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+    });
+
+    it('rejects receiptKey referencing a different account with 403', async () => {
+      const body = makeValidBody({
+        receiptKey: 'receipts/acct_OTHER/stolen-receipt.jpg',
+      });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(403);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('FORBIDDEN');
+      expect(responseBody.error).toMatch(/receiptKey/i);
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('rejects receiptKey without the expected receipts/ prefix with 403', async () => {
+      const body = makeValidBody({
+        receiptKey: 'other-path/acct_01HXYZ/receipt.jpg',
+      });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(403);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('FORBIDDEN');
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('allows null receiptKey (no receipt uploaded)', async () => {
+      const body = makeValidBody({ receiptKey: null });
+      mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>
+        Promise.resolve(makeMockExpense(input)),
+      );
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+    });
+
+    it('rejects receiptKey that uses path traversal to escape account scope', async () => {
+      const body = makeValidBody({
+        receiptKey: 'receipts/acct_01HXYZ/../../acct_OTHER/receipt.jpg',
+      });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(403);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('FORBIDDEN');
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+  });
 });
