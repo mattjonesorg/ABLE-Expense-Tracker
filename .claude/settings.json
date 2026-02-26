@@ -10,6 +10,22 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "agent",
+            "prompt": "Review the changes this agent made for security issues: hardcoded secrets/credentials, XSS, SQL/NoSQL injection, IDOR (cross-account data access), overly permissive IAM policies, missing authentication/authorization checks, PII exposure, and OWASP top 10 concerns. Only report CRITICAL or HIGH findings that should block. If no blocking findings, respond with APPROVED. Be concise — max 5 lines.",
+            "model": "claude-sonnet-4-6",
+            "statusMessage": "Security review..."
+          }
+        ]
+      }
     ]
+  },
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   }
 }

@@ -1,0 +1,89 @@
+name: Security Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  security-review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get PR diff
+        id: diff
+        run: |
+          git fetch origin ${{ github.base_ref }} --depth=1
+          git diff origin/${{ github.base_ref }}...HEAD > /tmp/pr-diff.txt
+          echo "size=$(wc -c < /tmp/pr-diff.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Run security review
+        if: steps.diff.outputs.size != '0'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          DIFF=$(cat /tmp/pr-diff.txt | head -c 90000)
+
+          REVIEW=$(curl -s https://api.anthropic.com/v1/messages \
+            -H "content-type: application/json" \
+            -H "x-api-key: $ANTHROPIC_API_KEY" \
+            -H "anthropic-version: 2023-06-01" \
+            -d "$(jq -n --arg diff "$DIFF" '{
+              "model": "claude-sonnet-4-6-20250514",
+              "max_tokens": 1024,
+              "messages": [{
+                "role": "user",
+                "content": ("You are the Security Reviewer for the ABLE Expense Tracker (AWS serverless: Cognito, Lambda, DynamoDB, S3, CloudFront, CDK). Review this PR diff for security issues.\n\nCheck for:\n- Hardcoded secrets, credentials, API keys, or AWS account IDs\n- XSS vectors in frontend code\n- SQL/NoSQL injection risks\n- IDOR (cross-account data access without auth check)\n- Overly permissive IAM policies\n- Missing authentication or authorization checks\n- PII exposure (SSN, account numbers sent to external APIs)\n- S3 buckets without BlockPublicAccess\n- CORS wildcards in production config\n\nRate findings: CRITICAL, HIGH, MEDIUM, LOW, INFO.\nCRITICAL/HIGH = FAIL. Otherwise PASS.\n\nOutput exactly this format:\n## Security Review\n### Verdict: PASS or FAIL\n### Findings\n- **[SEVERITY]** Description\n\nBe concise.\n\nDiff:\n" + $diff)
+              }]
+            }')" | jq -r '.content[0].text')
+
+          echo "$REVIEW" > /tmp/review.txt
+          cat /tmp/review.txt
+
+          # Fail the job if verdict is FAIL
+          if echo "$REVIEW" | grep -qi "Verdict: FAIL"; then
+            echo "::error::Security review found blocking issues"
+            exit 1
+          fi
+
+      - name: Post review comment
+        if: always() && steps.diff.outputs.size != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const review = fs.readFileSync('/tmp/review.txt', 'utf8');
+            const body = review + '\n\n---\n_Automated security review by Claude Sonnet_';
+
+            // Find and update existing comment, or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c =>
+              c.body?.includes('Automated security review by Claude Sonnet')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
