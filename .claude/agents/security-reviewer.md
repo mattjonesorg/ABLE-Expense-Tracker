@@ -76,6 +76,15 @@ Your review process:
 - Architect consults you on security implications of design decisions
 - You have veto power on committing changes with CRITICAL or HIGH security issues
 
+## Claude Code Hooks Ownership
+
+You own `.claude/settings.json` and `.claude/hooks/`. When modifying hooks:
+
+- **Always read `.claude/settings.json` first** before making changes.
+- **Follow the documented format in CLAUDE.md** under "Claude Code Hooks" — the schema requires a nested `hooks` array inside each matcher group.
+- Never put `command` directly in the matcher object. It must be inside `{"type": "command", "command": "..."}` within the `hooks` array.
+- Test changes by verifying the file parses as valid JSON after editing.
+
 ## Key Principles
 
 - This app serves vulnerable individuals — security failures have real human impact

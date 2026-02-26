@@ -93,6 +93,34 @@ These are non-negotiable. Every agent must follow them. They are the guardrails 
 - CI runs on every PR and push to main.
 - Deployments are automated through GitHub Actions.
 
+### Claude Code Hooks (`.claude/settings.json`)
+
+- **Never guess the hook schema.** Always read `.claude/settings.json` before modifying it.
+- The correct format uses a nested `hooks` array inside each matcher group:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/check-secrets-pretooluse.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- **Common mistake:** putting `command` directly in the matcher object (wrong). The `command` must be inside a hook object within the `hooks` array.
+- Valid hook event names: `PreToolUse`, `PostToolUse`, `Notification`, `Stop`, `SubagentStop`
+- `matcher` is a regex matched against tool names (e.g., `"Write|Edit"`, `"Bash"`)
+- Each hook object requires `type` (`"command"`, `"prompt"`, or `"agent"`) plus the corresponding field
+
 ### Git Conventions
 
 - Branch naming: `<type>/<issue-number>-<short-description>` (e.g., `feat/42-expense-form`)
