@@ -22,7 +22,8 @@ describe('CDK Stacks', () => {
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
     });
     const bucket = new s3.Bucket(depStack, 'Bucket');
-    expect(() => new ApiStack(app, 'TestApi', { userPool, table, bucket })).not.toThrow();
+    const userPoolClient = userPool.addClient('TestClient');
+    expect(() => new ApiStack(app, 'TestApi', { userPool, userPoolClient, table, bucket })).not.toThrow();
 
     expect(() => new HostingStack(app, 'TestHosting')).not.toThrow();
   });

@@ -8,6 +8,7 @@ import {
   HttpMethod,
   CorsHttpMethod,
 } from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Construct } from 'constructs';
 
@@ -17,6 +18,8 @@ import { Construct } from 'constructs';
 export interface ApiStackProps extends cdk.StackProps {
   /** Cognito User Pool for authentication */
   readonly userPool: cognito.IUserPool;
+  /** Cognito User Pool Client for JWT audience validation */
+  readonly userPoolClient: cognito.IUserPoolClient;
   /** DynamoDB table for expense data */
   readonly table: dynamodb.ITable;
   /** S3 bucket for receipt storage */
@@ -52,7 +55,16 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const { userPool, table, bucket } = props;
+    const { userPool, userPoolClient, table, bucket } = props;
+
+    // --- JWT Authorizer ---
+    const authorizer = new HttpUserPoolAuthorizer(
+      'CognitoAuthorizer',
+      userPool,
+      {
+        userPoolClients: [userPoolClient],
+      },
+    );
 
     // --- HTTP API ---
     this.httpApi = new HttpApi(this, 'AbleTrackerApi', {
@@ -68,6 +80,7 @@ export class ApiStack extends cdk.Stack {
         allowOrigins: ['*'],
         allowHeaders: ['Content-Type', 'Authorization'],
       },
+      defaultAuthorizer: authorizer,
     });
 
     // --- Route Definitions ---
