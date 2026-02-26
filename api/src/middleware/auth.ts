@@ -96,17 +96,17 @@ export function createAuthMiddleware(
       event.headers['authorization'] ?? event.headers['Authorization'];
 
     if (!authHeader) {
-      return unauthorized('Missing Authorization header');
+      return unauthorized('Unauthorized');
     }
 
     if (!authHeader.startsWith('Bearer ')) {
-      return unauthorized('Invalid Authorization header format');
+      return unauthorized('Unauthorized');
     }
 
     const token = authHeader.slice('Bearer '.length);
 
     if (token.length === 0) {
-      return unauthorized('Invalid Authorization header format');
+      return unauthorized('Unauthorized');
     }
 
     try {
@@ -115,13 +115,15 @@ export function createAuthMiddleware(
       // Validate role claim is present and valid
       const role = claims['custom:role'];
       if (!role || !VALID_ROLES.has(role)) {
-        return forbidden('Invalid role claim');
+        // #43: Generic error — do not reveal which claim failed
+        return forbidden('Forbidden');
       }
 
       // Validate accountId claim is present and non-empty
       const accountId = claims['custom:accountId'];
       if (!accountId) {
-        return forbidden('Missing accountId claim');
+        // #43: Generic error — do not reveal which claim failed
+        return forbidden('Forbidden');
       }
 
       const context: AuthContext = {
@@ -133,10 +135,9 @@ export function createAuthMiddleware(
       };
 
       return { success: true, context };
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Token verification failed';
-      return unauthorized(message);
+    } catch {
+      // #43: Generic error — do not leak verifier details (token expired, invalid signature, etc.)
+      return unauthorized('Unauthorized');
     }
   };
 }
