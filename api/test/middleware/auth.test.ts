@@ -263,6 +263,99 @@ describe('createAuthMiddleware', () => {
     });
   });
 
+  describe('missing role claim', () => {
+    it('returns 403 when custom:role claim is missing', async () => {
+      const claimsWithoutRole: TokenClaims = {
+        ...validClaims,
+        'custom:role': '',
+      };
+      const verifier = vi.fn<TokenVerifier>().mockResolvedValue(claimsWithoutRole);
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer valid-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(403);
+
+      const body = JSON.parse(response.body as string) as { error: string; code: string };
+      expect(body.code).toBe('FORBIDDEN');
+    });
+
+    it('returns 403 when custom:role claim has an invalid value', async () => {
+      const claimsWithBadRole: TokenClaims = {
+        ...validClaims,
+        'custom:role': 'admin',
+      };
+      const verifier = vi.fn<TokenVerifier>().mockResolvedValue(claimsWithBadRole);
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer valid-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(403);
+
+      const body = JSON.parse(response.body as string) as { error: string; code: string };
+      expect(body.error).toBe('Invalid role claim');
+      expect(body.code).toBe('FORBIDDEN');
+    });
+  });
+
+  describe('missing accountId claim', () => {
+    it('returns 403 when custom:accountId claim is missing', async () => {
+      const claimsWithoutAccountId: TokenClaims = {
+        ...validClaims,
+        'custom:accountId': '',
+      };
+      const verifier = vi.fn<TokenVerifier>().mockResolvedValue(claimsWithoutAccountId);
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer valid-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(403);
+
+      const body = JSON.parse(response.body as string) as { error: string; code: string };
+      expect(body.error).toBe('Missing accountId claim');
+      expect(body.code).toBe('FORBIDDEN');
+    });
+  });
+
+  describe('role values are preserved in auth context', () => {
+    it('preserves owner role in auth result', async () => {
+      const verifier = vi.fn<TokenVerifier>().mockResolvedValue(validClaims);
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer valid-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(true);
+      const ctx = (result as Extract<AuthResult, { success: true }>).context;
+      expect(ctx.role).toBe('owner');
+    });
+
+    it('preserves authorized_rep role in auth result', async () => {
+      const repClaims: TokenClaims = {
+        ...validClaims,
+        'custom:role': 'authorized_rep',
+      };
+      const verifier = vi.fn<TokenVerifier>().mockResolvedValue(repClaims);
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer rep-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(true);
+      const ctx = (result as Extract<AuthResult, { success: true }>).context;
+      expect(ctx.role).toBe('authorized_rep');
+    });
+  });
+
   describe('case-insensitive header handling', () => {
     it('handles lowercase authorization header', async () => {
       const verifier = vi.fn<TokenVerifier>().mockResolvedValue(validClaims);
