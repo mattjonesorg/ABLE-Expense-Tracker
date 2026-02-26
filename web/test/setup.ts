@@ -22,3 +22,6 @@ class ResizeObserverMock {
   disconnect() {}
 }
 window.ResizeObserver = ResizeObserverMock;
+
+// Mantine Combobox uses scrollIntoView which jsdom does not implement
+Element.prototype.scrollIntoView = function () {};
