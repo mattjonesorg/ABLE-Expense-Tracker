@@ -1,9 +1,10 @@
 {
   "hooks": {
-    "PreCommit": [
+    "PreToolUse": [
       {
-        "command": "bash .claude/hooks/check-secrets.sh",
-        "description": "Scan for secrets and AWS account info in staged files"
+        "matcher": "Write|Edit",
+        "command": "bash .claude/hooks/check-secrets-pretooluse.sh",
+        "description": "Scan for secrets and AWS account info before writing files"
       }
     ]
   }
