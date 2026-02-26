@@ -2,6 +2,15 @@ name: Deploy Frontend
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'web/**'
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   deploy:
@@ -22,22 +31,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # TODO: Configure AWS credentials
-      # - name: Configure AWS credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
-      #   with:
-      #     role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-      #     aws-region: ${{ vars.AWS_REGION }}
+      - name: Build frontend
+        run: pnpm --filter web build
 
-      # TODO: Build the frontend
-      # - name: Build frontend
-      #   working-directory: web
-      #   run: pnpm build
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
 
-      # TODO: Sync to S3
-      # - name: Deploy to S3
-      #   run: aws s3 sync web/dist s3://${{ vars.FRONTEND_BUCKET }} --delete
+      - name: Deploy to S3
+        run: aws s3 sync web/dist s3://${{ vars.FRONTEND_BUCKET }} --delete
 
-      # TODO: Invalidate CloudFront cache
-      # - name: Invalidate CloudFront
-      #   run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+      - name: Invalidate CloudFront
+        run: aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
