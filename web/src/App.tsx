@@ -4,10 +4,7 @@ import { AppLayout } from './components/AppShell';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Expenses } from './pages/Expenses';
-
-function NewExpensePlaceholder() {
-  return <div>New Expense</div>;
-}
+import { ExpenseForm } from './pages/ExpenseForm';
 
 export function App() {
   return (
@@ -21,7 +18,7 @@ export function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/expenses" element={<Expenses />} />
-            <Route path="/expenses/new" element={<NewExpensePlaceholder />} />
+            <Route path="/expenses/new" element={<ExpenseForm />} />
           </Route>
 
           {/* Catch-all redirect */}
