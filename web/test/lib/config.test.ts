@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { CognitoConfig } from '../../src/lib/config';
+import { API_URL } from '../../src/lib/config';
 
 describe('config', () => {
   const originalEnv = import.meta.env;
@@ -57,5 +58,18 @@ describe('config', () => {
     delete import.meta.env.VITE_COGNITO_USER_POOL_ID;
     delete import.meta.env.VITE_COGNITO_CLIENT_ID;
     delete import.meta.env.VITE_AWS_REGION;
+  });
+
+  it('exports API_URL as a non-empty string', () => {
+    expect(typeof API_URL).toBe('string');
+    expect(API_URL.length).toBeGreaterThan(0);
+  });
+
+  it('API_URL does not have a trailing slash', () => {
+    expect(API_URL.endsWith('/')).toBe(false);
+  });
+
+  it('API_URL starts with https://', () => {
+    expect(API_URL.startsWith('https://')).toBe(true);
   });
 });

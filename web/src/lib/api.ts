@@ -1,10 +1,16 @@
 /**
- * Mock API client for ABLE Tracker.
- * All functions return promises to mirror real API calls.
- * Will be replaced with real fetch-based API calls in issue #54.
+ * API client for ABLE Tracker.
+ * Makes real fetch calls to the deployed API Gateway endpoints.
+ * All requests require an authenticated user (Bearer token).
+ *
+ * Replaces the previous mock implementation as part of issue #54.
  */
 
 import type { Expense, AbleCategory, CategoryResult } from './types';
+import { API_URL } from './config';
+import { getIdToken } from './auth';
+
+// --- Exported Types ---
 
 /** Input for creating a new expense via the form */
 export interface ExpenseFormInput {
@@ -33,166 +39,217 @@ export interface ListExpensesFilters {
   endDate?: string;
 }
 
-const MOCK_EXPENSES: Expense[] = [
-  {
-    expenseId: '01JBQE1A2B3C4D5E6F7G8H9J0K',
-    accountId: 'acct_mock_001',
-    date: '2026-02-15',
-    vendor: 'City Transit Authority',
-    description: 'Monthly bus pass',
-    amount: 7500,
-    category: 'Transportation',
-    categoryConfidence: 'ai_confirmed',
-    categoryNotes: 'Public transit pass is a qualified transportation expense.',
-    receiptKey: null,
-    submittedBy: 'user_001',
-    paidBy: 'Matt',
-    reimbursed: false,
-    reimbursedAt: null,
-    createdAt: '2026-02-15T10:30:00Z',
-    updatedAt: '2026-02-15T10:30:00Z',
-  },
-  {
-    expenseId: '01JBQE2B3C4D5E6F7G8H9J0KL',
-    accountId: 'acct_mock_001',
-    date: '2026-02-10',
-    vendor: 'Whole Foods Market',
-    description: 'Weekly groceries',
-    amount: 12350,
-    category: 'Basic living expenses',
-    categoryConfidence: 'ai_confirmed',
-    categoryNotes: 'Groceries qualify as basic living expenses.',
-    receiptKey: 'receipts/mock-002.jpg',
-    submittedBy: 'user_001',
-    paidBy: 'Sarah',
-    reimbursed: true,
-    reimbursedAt: '2026-02-12T14:00:00Z',
-    createdAt: '2026-02-10T08:15:00Z',
-    updatedAt: '2026-02-12T14:00:00Z',
-  },
-  {
-    expenseId: '01JBQE3C4D5E6F7G8H9J0KLM',
-    accountId: 'acct_mock_001',
-    date: '2026-01-28',
-    vendor: 'Dr. Smith Family Practice',
-    description: 'Annual checkup copay',
-    amount: 4000,
-    category: 'Health, prevention & wellness',
-    categoryConfidence: 'ai_suggested',
-    categoryNotes: 'Medical copay is a qualified health expense.',
-    receiptKey: 'receipts/mock-003.jpg',
-    submittedBy: 'user_002',
-    paidBy: 'Matt',
-    reimbursed: false,
-    reimbursedAt: null,
-    createdAt: '2026-01-28T16:45:00Z',
-    updatedAt: '2026-01-28T16:45:00Z',
-  },
-  {
-    expenseId: '01JBQE4D5E6F7G8H9J0KLMN',
-    accountId: 'acct_mock_001',
-    date: '2026-01-15',
-    vendor: 'State University',
-    description: 'Spring semester tuition deposit',
-    amount: 250000,
-    category: 'Education',
-    categoryConfidence: 'user_selected',
-    categoryNotes: 'Tuition is a qualified education expense.',
-    receiptKey: 'receipts/mock-004.pdf',
-    submittedBy: 'user_001',
-    paidBy: 'Matt',
-    reimbursed: true,
-    reimbursedAt: '2026-01-20T09:00:00Z',
-    createdAt: '2026-01-15T12:00:00Z',
-    updatedAt: '2026-01-20T09:00:00Z',
-  },
-];
+// --- Error Classes ---
 
 /**
- * Create a new expense.
- * Mock: simulates a 200ms network delay then returns a mock Expense.
+ * Thrown when the user's authentication token is missing or rejected (401).
+ * Consumers should redirect to the login page when catching this error.
  */
-export async function createExpense(data: ExpenseFormInput): Promise<Expense> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 200));
+export class ApiAuthenticationError extends Error {
+  constructor(message = 'Authentication required. Please log in.') {
+    super(message);
+    this.name = 'ApiAuthenticationError';
+  }
+}
 
-  const now = new Date().toISOString();
+// --- Internal Helpers ---
 
+/**
+ * Get the authorization headers for API requests.
+ * Throws ApiAuthenticationError if no token is available.
+ */
+function getAuthHeaders(): Record<string, string> {
+  const token = getIdToken();
+  if (!token) {
+    throw new ApiAuthenticationError();
+  }
   return {
-    expenseId: `exp_mock_${Date.now()}`,
-    accountId: 'acct_mock_001',
-    date: data.date,
-    vendor: data.vendor,
-    description: data.description,
-    amount: data.amount,
-    category: data.category ?? 'Basic living expenses',
-    categoryConfidence: data.categoryConfidence,
-    categoryNotes: '',
-    receiptKey: null,
-    submittedBy: 'user_mock_001',
-    paidBy: data.paidBy,
-    reimbursed: false,
-    reimbursedAt: null,
-    createdAt: now,
-    updatedAt: now,
+    'Authorization': `Bearer ${token}`,
   };
 }
 
 /**
- * Categorize an expense using AI.
- * Mock: simulates a 500ms network delay then returns a suggestion.
+ * Parse an API error response and throw an appropriate error.
+ * Handles JSON error bodies with `{ error, code }` format and
+ * falls back to status text for non-JSON responses.
  */
-export async function categorizeExpense(
-  data: CategorizeInput,
-): Promise<CategoryResult> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
-  // Simple mock logic based on keywords
-  let suggestedCategory: AbleCategory = 'Basic living expenses';
-
-  const text = `${data.vendor} ${data.description}`.toLowerCase();
-  if (text.includes('tutor') || text.includes('school') || text.includes('book')) {
-    suggestedCategory = 'Education';
-  } else if (text.includes('rent') || text.includes('mortgage') || text.includes('utility')) {
-    suggestedCategory = 'Housing';
-  } else if (text.includes('uber') || text.includes('lyft') || text.includes('gas')) {
-    suggestedCategory = 'Transportation';
-  } else if (text.includes('doctor') || text.includes('pharmacy') || text.includes('medical')) {
-    suggestedCategory = 'Health, prevention & wellness';
+async function handleErrorResponse(response: Response): Promise<never> {
+  if (response.status === 401) {
+    throw new ApiAuthenticationError();
   }
 
-  return {
-    suggestedCategory,
-    confidence: 'high',
-    reasoning: `Based on the vendor "${data.vendor}" and description, this appears to be a ${suggestedCategory} expense.`,
-    followUpQuestion: null,
-  };
+  // Try to parse JSON error body
+  const contentType = response.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    const body: unknown = await response.json();
+    if (
+      typeof body === 'object' &&
+      body !== null &&
+      'error' in body &&
+      typeof (body as Record<string, unknown>)['error'] === 'string'
+    ) {
+      throw new Error((body as Record<string, unknown>)['error'] as string);
+    }
+  }
+
+  // Fallback for non-JSON responses
+  throw new Error(`API request failed with status ${response.status}`);
 }
 
 /**
- * Fetch the list of expenses, optionally filtered.
- * Currently returns mock data. Will be replaced with real API calls.
+ * Make an authenticated API request.
+ * Automatically adds the Authorization header and handles errors.
+ */
+async function apiRequest(
+  path: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  const authHeaders = getAuthHeaders();
+  const headers: Record<string, string> = {
+    ...authHeaders,
+    ...(options.headers as Record<string, string> | undefined),
+  };
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    await handleErrorResponse(response);
+  }
+
+  return response;
+}
+
+// --- Public API Functions ---
+
+/**
+ * Fetch the list of expenses, optionally filtered by category and date range.
+ * Calls GET /expenses with query parameters.
  */
 export async function listExpenses(
   filters?: ListExpensesFilters,
 ): Promise<Expense[]> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 50));
-
-  let results = [...MOCK_EXPENSES];
+  const params = new URLSearchParams();
 
   if (filters?.category) {
-    results = results.filter((e) => e.category === filters.category);
+    params.set('category', filters.category);
   }
-
   if (filters?.startDate) {
-    results = results.filter((e) => e.date >= filters.startDate!);
+    params.set('startDate', filters.startDate);
   }
-
   if (filters?.endDate) {
-    results = results.filter((e) => e.date <= filters.endDate!);
+    params.set('endDate', filters.endDate);
   }
 
-  return results;
+  const queryString = params.toString();
+  const path = queryString ? `/expenses?${queryString}` : '/expenses';
+
+  const response = await apiRequest(path, { method: 'GET' });
+  const data: unknown = await response.json();
+
+  // The API returns { expenses: Expense[] }
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    'expenses' in data &&
+    Array.isArray((data as Record<string, unknown>)['expenses'])
+  ) {
+    return (data as { expenses: Expense[] }).expenses;
+  }
+
+  // Fallback: if the response is an array directly
+  if (Array.isArray(data)) {
+    return data as Expense[];
+  }
+
+  return [];
+}
+
+/**
+ * Fetch a single expense by ID.
+ * Calls GET /expenses/{id}.
+ */
+export async function getExpense(id: string): Promise<Expense> {
+  const response = await apiRequest(`/expenses/${encodeURIComponent(id)}`, {
+    method: 'GET',
+  });
+  return (await response.json()) as Expense;
+}
+
+/**
+ * Create a new expense.
+ * Calls POST /expenses with a JSON body.
+ * Note: receiptFile is not sent in this request; receipt upload is handled separately.
+ */
+export async function createExpense(data: ExpenseFormInput): Promise<Expense> {
+  const body = {
+    vendor: data.vendor,
+    description: data.description,
+    amount: data.amount,
+    date: data.date,
+    paidBy: data.paidBy,
+    category: data.category,
+    categoryConfidence: data.categoryConfidence,
+  };
+
+  const response = await apiRequest('/expenses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  return (await response.json()) as Expense;
+}
+
+/**
+ * Categorize an expense using AI.
+ * Calls POST /categorize with vendor and description.
+ * Returns null when the API returns a graceful degradation response.
+ */
+export async function categorizeExpense(
+  data: CategorizeInput,
+): Promise<CategoryResult | null> {
+  const response = await apiRequest('/categorize', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      vendor: data.vendor,
+      description: data.description,
+    }),
+  });
+
+  const result: unknown = await response.json();
+
+  // Handle graceful degradation: { result: null }
+  if (
+    typeof result === 'object' &&
+    result !== null &&
+    'result' in result &&
+    (result as Record<string, unknown>)['result'] === null
+  ) {
+    return null;
+  }
+
+  return result as CategoryResult;
+}
+
+/**
+ * Mark an expense as reimbursed.
+ * Calls POST /expenses/{id}/reimburse.
+ */
+export async function reimburseExpense(id: string): Promise<Expense> {
+  const response = await apiRequest(
+    `/expenses/${encodeURIComponent(id)}/reimburse`,
+    {
+      method: 'POST',
+    },
+  );
+
+  return (await response.json()) as Expense;
 }

@@ -91,7 +91,15 @@ export function ExpenseForm() {
     setIsCategorizing(true);
     try {
       const result = await categorizeExpense({ vendor, description });
-      form.setFieldValue('category', result.suggestedCategory);
+      if (result) {
+        form.setFieldValue('category', result.suggestedCategory);
+      } else {
+        notifications.show({
+          title: 'No suggestion available',
+          message: 'AI could not determine a category. Please select one manually.',
+          color: 'yellow',
+        });
+      }
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Failed to get category suggestion';
