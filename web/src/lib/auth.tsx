@@ -6,12 +6,21 @@ import {
   useCallback,
   type ReactNode,
 } from 'react';
+import {
+  authenticateUser,
+  parseIdToken,
+  storeTokens,
+  loadTokens,
+  clearTokens,
+  isTokenExpired,
+} from './cognito';
 
 export interface AuthUser {
   email: string;
   displayName: string;
   accountId: string;
   role: string;
+  cognitoSub: string;
 }
 
 export interface AuthState {
@@ -29,33 +38,6 @@ type AuthContextValue = AuthState & AuthActions;
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-/**
- * Mock login implementation.
- * Simulates Cognito USER_PASSWORD_AUTH flow.
- * Will be replaced with real fetch-based Cognito integration
- * once the infra stack is deployed.
- */
-async function mockCognitoLogin(
-  email: string,
-  password: string,
-): Promise<AuthUser> {
-  // Simulate network delay
-  await new Promise((resolve) => setTimeout(resolve, 50));
-
-  // Simulate invalid credentials
-  if (email === 'bad@example.com' || password === 'wrongpassword') {
-    throw new Error('Invalid credentials');
-  }
-
-  // Simulate successful auth — return mock user
-  return {
-    email,
-    displayName: email.split('@')[0] ?? email,
-    accountId: 'acct_mock_001',
-    role: 'owner',
-  };
-}
-
 interface AuthProviderProps {
   children: ReactNode;
 }
@@ -69,22 +51,57 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Check for existing session on mount
   useEffect(() => {
-    // In the future, this will check for a valid Cognito session token
-    // For now, just mark loading as complete
+    const tokens = loadTokens();
+
+    if (tokens && !isTokenExpired(tokens.idToken)) {
+      try {
+        const userInfo = parseIdToken(tokens.idToken);
+        setState({
+          isAuthenticated: true,
+          user: {
+            email: userInfo.email,
+            displayName: userInfo.displayName,
+            accountId: userInfo.accountId,
+            role: userInfo.role,
+            cognitoSub: userInfo.sub,
+          },
+          isLoading: false,
+        });
+        return;
+      } catch {
+        // Token parse failed — fall through to clear
+      }
+    }
+
+    // No valid session — clear any stale tokens
+    if (tokens) {
+      clearTokens();
+    }
+
     setState((prev) => ({ ...prev, isLoading: false }));
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const user = await mockCognitoLogin(email, password);
+    const tokens = await authenticateUser(email, password);
+    storeTokens(tokens);
+
+    const userInfo = parseIdToken(tokens.idToken);
+
     setState({
       isAuthenticated: true,
-      user,
+      user: {
+        email: userInfo.email,
+        displayName: userInfo.displayName,
+        accountId: userInfo.accountId,
+        role: userInfo.role,
+        cognitoSub: userInfo.sub,
+      },
       isLoading: false,
     });
   }, []);
 
   const logout = useCallback(() => {
-    // In the future, this will call Cognito signOut and clear tokens
+    clearTokens();
     setState({
       isAuthenticated: false,
       user: null,

@@ -9,6 +9,7 @@ coverage
 .vite
 *.d.ts
 !src/**/*.d.ts
+!**/src/**/*.d.ts
 .claude-setup
 
 # Secrets and sensitive files
