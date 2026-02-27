@@ -12,6 +12,9 @@ import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Construct } from 'constructs';
 
+/** Local development origin — always included in CORS allowed origins. */
+const LOCAL_DEV_ORIGIN = 'http://localhost:5173';
+
 /**
  * Props for the ApiStack. Accepts cross-stack references from AuthStack and DataStack.
  */
@@ -24,6 +27,12 @@ export interface ApiStackProps extends cdk.StackProps {
   readonly table: dynamodb.ITable;
   /** S3 bucket for receipt storage */
   readonly bucket: s3.IBucket;
+  /**
+   * Additional CORS allowed origins (e.g. CloudFront distribution URLs).
+   * The local dev origin (http://localhost:5173) is always included automatically.
+   * Can also be set via CDK context key "allowedOrigins" as a comma-separated string.
+   */
+  readonly allowedOrigins?: readonly string[];
 }
 
 /**
@@ -57,6 +66,9 @@ export class ApiStack extends cdk.Stack {
 
     const { userPool, userPoolClient, table, bucket } = props;
 
+    // --- Resolve CORS allowed origins ---
+    const corsOrigins = this.resolveAllowedOrigins(props.allowedOrigins);
+
     // --- JWT Authorizer ---
     const authorizer = new HttpUserPoolAuthorizer(
       'CognitoAuthorizer',
@@ -77,7 +89,7 @@ export class ApiStack extends cdk.Stack {
           CorsHttpMethod.DELETE,
           CorsHttpMethod.OPTIONS,
         ],
-        allowOrigins: ['*'],
+        allowOrigins: corsOrigins,
         allowHeaders: ['Content-Type', 'Authorization'],
       },
       defaultAuthorizer: authorizer,
@@ -176,5 +188,50 @@ export class ApiStack extends cdk.Stack {
       value: this.httpApi.apiEndpoint,
       description: 'HTTP API endpoint URL',
     });
+  }
+
+  /**
+   * Builds the list of allowed CORS origins from props and CDK context.
+   *
+   * Resolution order:
+   * 1. Origins passed via `allowedOrigins` prop (explicit, highest priority)
+   * 2. Origins from CDK context key "allowedOrigins" (comma-separated string)
+   * 3. Local dev origin is always appended if not already present
+   *
+   * @param propsOrigins - Origins from stack props, if any
+   * @returns Deduplicated array of allowed origin URLs
+   */
+  private resolveAllowedOrigins(
+    propsOrigins: readonly string[] | undefined,
+  ): string[] {
+    const origins = new Set<string>();
+
+    // 1. Add origins from props
+    if (propsOrigins) {
+      for (const origin of propsOrigins) {
+        const trimmed = origin.trim();
+        if (trimmed.length > 0) {
+          origins.add(trimmed);
+        }
+      }
+    }
+
+    // 2. Add origins from CDK context (comma-separated string)
+    const contextValue = this.node.tryGetContext('allowedOrigins') as
+      | string
+      | undefined;
+    if (typeof contextValue === 'string' && contextValue.length > 0) {
+      for (const origin of contextValue.split(',')) {
+        const trimmed = origin.trim();
+        if (trimmed.length > 0) {
+          origins.add(trimmed);
+        }
+      }
+    }
+
+    // 3. Always include local dev origin
+    origins.add(LOCAL_DEV_ORIGIN);
+
+    return [...origins];
   }
 }

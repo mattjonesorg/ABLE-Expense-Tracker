@@ -6,30 +6,32 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Template, Match, Capture } from 'aws-cdk-lib/assertions';
 import { ApiStack, ApiStackProps } from '../lib/api-stack.js';
 
+/** Helper to create dependency resources for ApiStack tests */
+function createTestDependencies(app: cdk.App, suffix = '') {
+  const authStack = new cdk.Stack(app, `TestAuthStack${suffix}`);
+  const userPool = new cognito.UserPool(authStack, 'UserPool');
+  const userPoolClient = userPool.addClient('TestClient');
+
+  const dataStack = new cdk.Stack(app, `TestDataStack${suffix}`);
+  const table = new dynamodb.Table(dataStack, 'Table', {
+    partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
+    sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
+  });
+  const bucket = new s3.Bucket(dataStack, 'Bucket');
+
+  return { userPool, userPoolClient, table, bucket };
+}
+
 describe('ApiStack', () => {
   let template: Template;
   let stack: ApiStack;
 
   beforeAll(() => {
     const app = new cdk.App();
-
-    // Create dependency stacks with real resources for cross-stack references
-    const authStack = new cdk.Stack(app, 'TestAuthStack');
-    const userPool = new cognito.UserPool(authStack, 'UserPool');
-    const userPoolClient = userPool.addClient('TestClient');
-
-    const dataStack = new cdk.Stack(app, 'TestDataStack');
-    const table = new dynamodb.Table(dataStack, 'Table', {
-      partitionKey: { name: 'PK', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
-    });
-    const bucket = new s3.Bucket(dataStack, 'Bucket');
+    const deps = createTestDependencies(app);
 
     const props: ApiStackProps = {
-      userPool,
-      userPoolClient,
-      table,
-      bucket,
+      ...deps,
     };
 
     stack = new ApiStack(app, 'TestApiStack', props);
@@ -44,6 +46,49 @@ describe('ApiStack', () => {
     it('configures the HTTP API with CORS', () => {
       template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
         ProtocolType: 'HTTP',
+      });
+    });
+  });
+
+  describe('CORS Configuration', () => {
+    it('does not allow wildcard (*) CORS origins', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+        CorsConfiguration: {
+          AllowOrigins: Match.not(Match.arrayWith(['*'])),
+        },
+      });
+    });
+
+    it('includes localhost:5173 for local development by default', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+        CorsConfiguration: {
+          AllowOrigins: Match.arrayWith(['http://localhost:5173']),
+        },
+      });
+    });
+
+    it('allows GET, POST, PUT, DELETE, OPTIONS methods', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+        CorsConfiguration: {
+          AllowMethods: Match.arrayWith([
+            'GET',
+            'POST',
+            'PUT',
+            'DELETE',
+            'OPTIONS',
+          ]),
+        },
+      });
+    });
+
+    it('allows Content-Type and Authorization headers', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+        CorsConfiguration: {
+          AllowHeaders: Match.arrayWith([
+            'Content-Type',
+            'Authorization',
+          ]),
+        },
       });
     });
   });
@@ -245,6 +290,89 @@ describe('ApiStack', () => {
   describe('Stack Properties', () => {
     it('exposes the httpApi as a public readonly property', () => {
       expect(stack.httpApi).toBeDefined();
+    });
+  });
+});
+
+describe('ApiStack CORS — custom origins', () => {
+  let template: Template;
+
+  beforeAll(() => {
+    const app = new cdk.App();
+    const deps = createTestDependencies(app, 'Custom');
+
+    const props: ApiStackProps = {
+      ...deps,
+      allowedOrigins: ['https://my-app.example.com', 'https://staging.example.com'],
+    };
+
+    const stack = new ApiStack(app, 'TestApiStackCustom', props);
+    template = Template.fromStack(stack);
+  });
+
+  it('includes the custom origins in CORS configuration', () => {
+    template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+      CorsConfiguration: {
+        AllowOrigins: Match.arrayWith([
+          'https://my-app.example.com',
+          'https://staging.example.com',
+        ]),
+      },
+    });
+  });
+
+  it('always includes localhost for development', () => {
+    template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+      CorsConfiguration: {
+        AllowOrigins: Match.arrayWith(['http://localhost:5173']),
+      },
+    });
+  });
+
+  it('does not allow wildcard (*) origins', () => {
+    template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+      CorsConfiguration: {
+        AllowOrigins: Match.not(Match.arrayWith(['*'])),
+      },
+    });
+  });
+});
+
+describe('ApiStack CORS — context-based origins', () => {
+  let template: Template;
+
+  beforeAll(() => {
+    const app = new cdk.App({
+      context: {
+        allowedOrigins: 'https://context-app.example.com,https://other.example.com',
+      },
+    });
+    const deps = createTestDependencies(app, 'Context');
+
+    const props: ApiStackProps = {
+      ...deps,
+    };
+
+    const stack = new ApiStack(app, 'TestApiStackContext', props);
+    template = Template.fromStack(stack);
+  });
+
+  it('reads allowed origins from CDK context', () => {
+    template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+      CorsConfiguration: {
+        AllowOrigins: Match.arrayWith([
+          'https://context-app.example.com',
+          'https://other.example.com',
+        ]),
+      },
+    });
+  });
+
+  it('always includes localhost for development', () => {
+    template.hasResourceProperties('AWS::ApiGatewayV2::Api', {
+      CorsConfiguration: {
+        AllowOrigins: Match.arrayWith(['http://localhost:5173']),
+      },
     });
   });
 });
