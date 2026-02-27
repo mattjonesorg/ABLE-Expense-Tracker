@@ -123,6 +123,7 @@ These are non-negotiable. Every agent must follow them. They are the guardrails 
 
 ### Git Conventions
 
+- **`main` is protected.** Never push directly to main. All changes must go through a feature branch and PR.
 - Branch naming: `<type>/<issue-number>-<short-description>` (e.g., `feat/42-expense-form`)
 - Commit messages: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`, `ci:`)
 - Every PR references the GitHub issue it addresses
