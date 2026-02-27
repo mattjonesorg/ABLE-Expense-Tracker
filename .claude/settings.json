@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "agent",
-            "prompt": "Review the changes this agent made for security issues: hardcoded secrets/credentials, XSS, SQL/NoSQL injection, IDOR (cross-account data access), overly permissive IAM policies, missing authentication/authorization checks, PII exposure, and OWASP top 10 concerns. Only report CRITICAL or HIGH findings that should block. If no blocking findings, respond with APPROVED. Be concise — max 5 lines.",
+            "prompt": "Review the changes this agent made for security issues. CRITICAL (always block): 1) Any API endpoint, route, or page accessible without authentication — every API handler MUST validate auth context and every frontend route with data MUST require login. 2) Hardcoded secrets, credentials, or API keys. HIGH (block): IDOR/cross-account data access, overly permissive IAM policies, missing authorization checks, PII exposure, XSS, injection, OWASP top 10. Specifically verify: all Lambda handlers check event.requestContext.authorizer, all frontend routes with data are behind auth guards, no API returns user data without a valid JWT. Only report CRITICAL or HIGH findings that should block. If no blocking findings, respond with APPROVED. Be concise — max 10 lines.",
             "model": "claude-sonnet-4-6",
             "statusMessage": "Security review..."
           }
