@@ -20,6 +20,12 @@
             "prompt": "Review the changes this agent made for security issues. CRITICAL (always block): 1) Any API endpoint, route, or page accessible without authentication — every API handler MUST validate auth context and every frontend route with data MUST require login. 2) Hardcoded secrets, credentials, or API keys. HIGH (block): IDOR/cross-account data access, overly permissive IAM policies, missing authorization checks, PII exposure, XSS, injection, OWASP top 10. Specifically verify: all Lambda handlers check event.requestContext.authorizer, all frontend routes with data are behind auth guards, no API returns user data without a valid JWT. Only report CRITICAL or HIGH findings that should block. If no blocking findings, respond with APPROVED. Be concise — max 10 lines.",
             "model": "claude-sonnet-4-6",
             "statusMessage": "Security review..."
+          },
+          {
+            "type": "agent",
+            "prompt": "Review the changes this agent made for QA/engineering quality. Check: 1) Tests exist for new code — test files should be written BEFORE or alongside implementation (TDD). Flag if new handlers, components, or utilities lack corresponding test files. 2) No skipped or disabled tests (.skip, .todo without justification). 3) No TypeScript `any` types — must use `unknown` with type guards. 4) Test assertions are meaningful — not just `toBeTruthy()` or `toBeDefined()` on everything; tests should verify specific values and behavior. 5) No `@ts-ignore` or `@ts-expect-error` without explanatory comments. 6) Money values use integers (cents), not floats. Rate findings: CRITICAL (no tests for new code, `any` types), HIGH (skipped tests, weak assertions, @ts-ignore without comment). Only report CRITICAL or HIGH findings that should block. If no blocking findings, respond with APPROVED. Be concise — max 10 lines.",
+            "model": "claude-sonnet-4-6",
+            "statusMessage": "QA review..."
           }
         ]
       }
