@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import type { AuthResult } from '../../../src/middleware/auth.js';
 import type { AuthContext } from '../../../src/middleware/auth.js';
+import { extractAuthContext } from '../../../src/middleware/auth.js';
 import { createUploadUrlHandler } from '../../../src/handlers/uploads/request-url.js';
 import type { UploadHandlerDeps } from '../../../src/handlers/uploads/request-url.js';
 
@@ -266,6 +267,80 @@ describe('createUploadUrlHandler', () => {
       expect(mockGetSignedUrl).toHaveBeenCalledOnce();
       const callArgs = mockGetSignedUrl.mock.calls[0];
       expect(callArgs[2]).toBe('image/png');
+    });
+  });
+
+  describe('defense-in-depth: extractAuthContext with API Gateway authorizer (#63)', () => {
+    /**
+     * Build event with API Gateway JWT authorizer context for defense-in-depth tests.
+     */
+    function makeEventWithAuthorizer(
+      body: string,
+      claims: Record<string, string> | undefined,
+    ): APIGatewayProxyEventV2 {
+      const event = makeEvent({ body });
+      if (claims) {
+        (event.requestContext as Record<string, unknown>)['authorizer'] = {
+          jwt: { claims, scopes: [] },
+        };
+      } else {
+        (event.requestContext as Record<string, unknown>)['authorizer'] = undefined;
+      }
+      return event;
+    }
+
+    it('returns 401 when authorizer context is missing and extractAuthContext is used', async () => {
+      const deps = makeDeps({
+        authenticate: (event: APIGatewayProxyEventV2) => Promise.resolve(extractAuthContext(event)),
+      });
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEventWithAuthorizer(
+        JSON.stringify({ contentType: 'image/jpeg' }),
+        undefined,
+      );
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(401);
+      const body = JSON.parse(result.body as string) as { message: string };
+      expect(body.message).toBe('Unauthorized');
+    });
+
+    it('returns 401 when JWT claims have no required fields via extractAuthContext', async () => {
+      const deps = makeDeps({
+        authenticate: (event: APIGatewayProxyEventV2) => Promise.resolve(extractAuthContext(event)),
+      });
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEventWithAuthorizer(
+        JSON.stringify({ contentType: 'image/jpeg' }),
+        { sub: 'some-sub' }, // missing email, accountId, role
+      );
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(401);
+    });
+
+    it('succeeds when valid authorizer context is present via extractAuthContext', async () => {
+      const deps = makeDeps({
+        authenticate: (event: APIGatewayProxyEventV2) => Promise.resolve(extractAuthContext(event)),
+      });
+      const handler = createUploadUrlHandler(deps);
+
+      const claims = {
+        sub: 'cognito-sub-12345',
+        email: 'alice@example.com',
+        'custom:accountId': 'acct_01HXYZ',
+        'custom:displayName': 'Alice Smith',
+        'custom:role': 'owner',
+      };
+      const event = makeEventWithAuthorizer(
+        JSON.stringify({ contentType: 'image/jpeg' }),
+        claims,
+      );
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
     });
   });
 });
