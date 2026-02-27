@@ -12,19 +12,22 @@ function renderApp() {
 }
 
 describe('App', () => {
-  it('should render the app title in the shell', async () => {
-    renderApp();
-    await waitFor(() => {
-      expect(screen.getByText('ABLE Tracker')).toBeInTheDocument();
-    });
-  });
-
-  it('should render the Dashboard page at the root route', async () => {
+  it('should redirect unauthenticated users to the login page', async () => {
     renderApp();
     await waitFor(() => {
       expect(
-        screen.getByRole('heading', { name: /dashboard/i }),
+        screen.getByRole('button', { name: /sign in/i }),
       ).toBeInTheDocument();
     });
+  });
+
+  it('should not show protected navigation to unauthenticated users', async () => {
+    renderApp();
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /sign in/i }),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
   });
 });

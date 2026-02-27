@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import {
   AppShell,
   Burger,
@@ -34,7 +34,12 @@ export function AppLayout() {
   const [opened, { toggle, close }] = useDisclosure();
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
+
+  // Redirect to login if not authenticated
+  if (!isLoading && !isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
   const handleLogout = () => {
     logout();
