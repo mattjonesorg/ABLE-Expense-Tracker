@@ -29,6 +29,36 @@ type AuthContextValue = AuthState & AuthActions;
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// --- Token Management ---
+// Module-level storage for the Cognito ID token.
+// Will be replaced with proper token storage (e.g., localStorage or Cognito SDK)
+// once real Cognito integration is complete.
+
+let idToken: string | null = null;
+
+/**
+ * Get the current Cognito ID token for API authorization.
+ * Returns null if the user is not authenticated.
+ */
+export function getIdToken(): string | null {
+  return idToken;
+}
+
+/**
+ * Store the Cognito ID token after successful authentication.
+ * Called internally by the AuthProvider on login.
+ */
+export function setIdToken(token: string): void {
+  idToken = token;
+}
+
+/**
+ * Clear the stored ID token on logout.
+ */
+export function clearIdToken(): void {
+  idToken = null;
+}
+
 /**
  * Mock login implementation.
  * Simulates Cognito USER_PASSWORD_AUTH flow.
@@ -76,6 +106,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback(async (email: string, password: string) => {
     const user = await mockCognitoLogin(email, password);
+    // Store mock ID token — will be replaced with real Cognito token
+    setIdToken(`mock-id-token-${Date.now()}`);
     setState({
       isAuthenticated: true,
       user,
@@ -85,6 +117,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(() => {
     // In the future, this will call Cognito signOut and clear tokens
+    clearIdToken();
     setState({
       isAuthenticated: false,
       user: null,
