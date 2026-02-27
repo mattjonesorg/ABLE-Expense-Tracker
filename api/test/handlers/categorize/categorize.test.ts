@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import type { CategoryResult } from '../../../src/lib/types.js';
 import type { AuthResult } from '../../../src/middleware/auth.js';
+import { extractAuthContext } from '../../../src/middleware/auth.js';
 import { createCategorizeHandler } from '../../../src/handlers/categorize/categorize.js';
 
 /**
@@ -151,5 +152,89 @@ describe('createCategorizeHandler', () => {
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body as string) as { result: null };
     expect(body.result).toBeNull();
+  });
+
+  describe('defense-in-depth: extractAuthContext with API Gateway authorizer (#63)', () => {
+    /**
+     * Build event with API Gateway JWT authorizer context for defense-in-depth tests.
+     */
+    function makeEventWithAuthorizer(
+      body: string | null,
+      claims: Record<string, string> | undefined,
+    ): APIGatewayProxyEventV2 {
+      const event = makeEvent({ body });
+      if (claims) {
+        (event.requestContext as Record<string, unknown>)['authorizer'] = {
+          jwt: { claims, scopes: [] },
+        };
+      } else {
+        (event.requestContext as Record<string, unknown>)['authorizer'] = undefined;
+      }
+      return event;
+    }
+
+    it('returns 401 when authorizer context is missing and extractAuthContext is used', async () => {
+      const categorize = vi.fn();
+      const handler = createCategorizeHandler({
+        categorize,
+        authenticate: (event: APIGatewayProxyEventV2) => Promise.resolve(extractAuthContext(event)),
+      });
+
+      const event = makeEventWithAuthorizer(
+        JSON.stringify({ vendor: 'Store', description: 'Item', amount: 100 }),
+        undefined,
+      );
+      const response = await handler(event);
+
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.body as string) as { message: string };
+      expect(body.message).toBe('Unauthorized');
+      expect(categorize).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 when JWT claims are incomplete via extractAuthContext', async () => {
+      const categorize = vi.fn();
+      const handler = createCategorizeHandler({
+        categorize,
+        authenticate: (event: APIGatewayProxyEventV2) => Promise.resolve(extractAuthContext(event)),
+      });
+
+      const claims = {
+        sub: 'user-123',
+        // missing email, accountId, role
+      };
+      const event = makeEventWithAuthorizer(
+        JSON.stringify({ vendor: 'Store', description: 'Item', amount: 100 }),
+        claims,
+      );
+      const response = await handler(event);
+
+      expect(response.statusCode).toBe(401);
+      expect(categorize).not.toHaveBeenCalled();
+    });
+
+    it('succeeds when valid authorizer context is present via extractAuthContext', async () => {
+      const categorize = vi.fn().mockResolvedValue(mockCategoryResult);
+      const handler = createCategorizeHandler({
+        categorize,
+        authenticate: (event: APIGatewayProxyEventV2) => Promise.resolve(extractAuthContext(event)),
+      });
+
+      const claims = {
+        sub: 'user-123',
+        email: 'test@example.com',
+        'custom:accountId': 'acct-456',
+        'custom:displayName': 'Test User',
+        'custom:role': 'owner',
+      };
+      const event = makeEventWithAuthorizer(
+        JSON.stringify({ vendor: 'University Store', description: 'Textbooks', amount: 15000 }),
+        claims,
+      );
+      const response = await handler(event);
+
+      expect(response.statusCode).toBe(200);
+      expect(categorize).toHaveBeenCalled();
+    });
   });
 });

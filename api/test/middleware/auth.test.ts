@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
-import { createAuthMiddleware } from '../../src/middleware/auth.js';
+import { createAuthMiddleware, extractAuthContext } from '../../src/middleware/auth.js';
 import type { TokenVerifier, TokenClaims, AuthResult } from '../../src/middleware/auth.js';
 
 /**
@@ -497,6 +497,278 @@ describe('createAuthMiddleware', () => {
       const result = await middleware(event);
 
       expect(result.success).toBe(true);
+    });
+  });
+});
+
+/**
+ * Helper to build a minimal APIGatewayProxyEventV2 with API Gateway JWT authorizer context.
+ */
+function makeEventWithAuthorizer(
+  claims: Record<string, string> | undefined,
+): APIGatewayProxyEventV2 {
+  const event: APIGatewayProxyEventV2 = {
+    version: '2.0',
+    routeKey: 'GET /test',
+    rawPath: '/test',
+    rawQueryString: '',
+    headers: {},
+    requestContext: {
+      accountId: '123456789012',
+      apiId: 'api-id',
+      authorizer: claims
+        ? { jwt: { claims, scopes: [] } }
+        : undefined,
+      domainName: 'test.execute-api.us-east-1.amazonaws.com',
+      domainPrefix: 'test',
+      http: {
+        method: 'GET',
+        path: '/test',
+        protocol: 'HTTP/1.1',
+        sourceIp: '127.0.0.1',
+        userAgent: 'test-agent',
+      },
+      requestId: 'request-id',
+      routeKey: 'GET /test',
+      stage: '$default',
+      time: '01/Jan/2025:00:00:00 +0000',
+      timeEpoch: 1735689600000,
+    },
+    isBase64Encoded: false,
+    body: undefined,
+  };
+
+  // When claims is undefined, remove the authorizer entirely
+  if (!claims) {
+    // Force-cast to remove authorizer for testing the missing case
+    (event.requestContext as Record<string, unknown>)['authorizer'] = undefined;
+  }
+
+  return event;
+}
+
+/**
+ * Standard valid JWT claims from API Gateway authorizer.
+ */
+const validAuthorizerClaims: Record<string, string> = {
+  sub: 'cognito-sub-12345',
+  email: 'alice@example.com',
+  'custom:accountId': 'acct_01HXYZ',
+  'custom:displayName': 'Alice Smith',
+  'custom:role': 'owner',
+};
+
+describe('extractAuthContext', () => {
+  describe('successful extraction', () => {
+    it('extracts auth context from valid API Gateway JWT authorizer claims', () => {
+      const event = makeEventWithAuthorizer(validAuthorizerClaims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(true);
+      const ctx = (result as Extract<AuthResult, { success: true }>).context;
+      expect(ctx.userId).toBe('cognito-sub-12345');
+      expect(ctx.accountId).toBe('acct_01HXYZ');
+      expect(ctx.email).toBe('alice@example.com');
+      expect(ctx.displayName).toBe('Alice Smith');
+      expect(ctx.role).toBe('owner');
+    });
+
+    it('handles authorized_rep role correctly', () => {
+      const claims = {
+        ...validAuthorizerClaims,
+        'custom:role': 'authorized_rep',
+      };
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(true);
+      const ctx = (result as Extract<AuthResult, { success: true }>).context;
+      expect(ctx.role).toBe('authorized_rep');
+    });
+  });
+
+  describe('missing authorizer context', () => {
+    it('returns 401 when event.requestContext.authorizer is undefined', () => {
+      const event = makeEventWithAuthorizer(undefined);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+
+      const body = JSON.parse(response.body as string) as { message: string };
+      expect(body.message).toBe('Unauthorized');
+    });
+
+    it('returns 401 when event.requestContext.authorizer.jwt is missing', () => {
+      const event: APIGatewayProxyEventV2 = {
+        version: '2.0',
+        routeKey: 'GET /test',
+        rawPath: '/test',
+        rawQueryString: '',
+        headers: {},
+        requestContext: {
+          accountId: '123456789012',
+          apiId: 'api-id',
+          authorizer: {} as APIGatewayProxyEventV2['requestContext']['authorizer'],
+          domainName: 'test.execute-api.us-east-1.amazonaws.com',
+          domainPrefix: 'test',
+          http: {
+            method: 'GET',
+            path: '/test',
+            protocol: 'HTTP/1.1',
+            sourceIp: '127.0.0.1',
+            userAgent: 'test-agent',
+          },
+          requestId: 'request-id',
+          routeKey: 'GET /test',
+          stage: '$default',
+          time: '01/Jan/2025:00:00:00 +0000',
+          timeEpoch: 1735689600000,
+        },
+        isBase64Encoded: false,
+        body: undefined,
+      };
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('returns 401 when event.requestContext.authorizer.jwt.claims is empty', () => {
+      const event = makeEventWithAuthorizer({});
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe('missing required claims', () => {
+    it('returns 401 when sub claim is missing', () => {
+      const claims = { ...validAuthorizerClaims };
+      delete claims['sub'];
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+      const body = JSON.parse(response.body as string) as { message: string };
+      expect(body.message).toBe('Unauthorized');
+    });
+
+    it('returns 401 when email claim is missing', () => {
+      const claims = { ...validAuthorizerClaims };
+      delete claims['email'];
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('returns 401 when custom:accountId claim is missing', () => {
+      const claims = { ...validAuthorizerClaims };
+      delete claims['custom:accountId'];
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('returns 401 when custom:role claim is missing', () => {
+      const claims = { ...validAuthorizerClaims };
+      delete claims['custom:role'];
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('returns 401 when custom:accountId claim is empty string', () => {
+      const claims = { ...validAuthorizerClaims, 'custom:accountId': '' };
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('returns 401 when sub claim is empty string', () => {
+      const claims = { ...validAuthorizerClaims, sub: '' };
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe('invalid role claim', () => {
+    it('returns 401 when custom:role has an invalid value', () => {
+      const claims = { ...validAuthorizerClaims, 'custom:role': 'admin' };
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('returns 401 when custom:role is empty string', () => {
+      const claims = { ...validAuthorizerClaims, 'custom:role': '' };
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.statusCode).toBe(401);
+    });
+  });
+
+  describe('response format', () => {
+    it('returns JSON response with content-type header on 401', () => {
+      const event = makeEventWithAuthorizer(undefined);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      expect(response.headers).toBeDefined();
+      expect(response.headers?.['content-type']).toBe('application/json');
+    });
+
+    it('returns { message: "Unauthorized" } body on 401', () => {
+      const event = makeEventWithAuthorizer(undefined);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      const body = JSON.parse(response.body as string) as { message: string };
+      expect(body.message).toBe('Unauthorized');
+    });
+
+    it('does not leak claim details in error responses', () => {
+      const claims = { ...validAuthorizerClaims };
+      delete claims['custom:accountId'];
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(false);
+      const response = (result as Extract<AuthResult, { success: false }>).response;
+      const body = JSON.parse(response.body as string) as { message: string };
+      expect(body.message).toBe('Unauthorized');
+      expect(body.message).not.toContain('accountId');
+      expect(body.message).not.toContain('claim');
     });
   });
 });
