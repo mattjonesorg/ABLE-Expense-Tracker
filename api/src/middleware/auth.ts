@@ -45,6 +45,11 @@ export type AuthResult =
 const VALID_ROLES: ReadonlySet<string> = new Set(['owner', 'authorized_rep']);
 
 /**
+ * Required claims that must be present and non-empty in the JWT token.
+ */
+const REQUIRED_CLAIMS = ['sub', 'email', 'custom:accountId', 'custom:role'] as const;
+
+/**
  * Build a standardized 401 error response.
  */
 function unauthorized(error: string): AuthResult {
@@ -140,4 +145,97 @@ export function createAuthMiddleware(
       return unauthorized('Unauthorized');
     }
   };
+}
+
+/**
+ * Build a standardized 401 response with the { message: 'Unauthorized' } format
+ * expected by issue #63 for defense-in-depth auth enforcement.
+ */
+function unauthorizedResponse(): AuthResult {
+  return {
+    success: false,
+    response: {
+      statusCode: 401,
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ message: 'Unauthorized' }),
+    },
+  };
+}
+
+/**
+ * Shape of the API Gateway HTTP API JWT authorizer context.
+ * This is what API Gateway populates when a JWT authorizer is configured.
+ */
+interface JwtAuthorizerContext {
+  jwt?: {
+    claims?: Record<string, string>;
+    scopes?: string[];
+  };
+}
+
+/**
+ * Defense-in-depth auth enforcement: extracts and validates the authenticated
+ * user context from the API Gateway HTTP API JWT authorizer.
+ *
+ * In production, API Gateway validates the JWT token and populates
+ * `event.requestContext.authorizer.jwt.claims`. This function validates
+ * that the authorizer context exists and contains all required claims,
+ * providing a second layer of auth enforcement at the Lambda level.
+ *
+ * Required claims: sub, email, custom:accountId, custom:role
+ *
+ * Returns an AuthResult discriminated union:
+ * - On success: { success: true, context: AuthContext }
+ * - On failure: { success: false, response: { statusCode: 401, ... } }
+ *
+ * @param event - API Gateway v2 event with optional JWT authorizer context
+ * @returns AuthResult with the authenticated context or a 401 response
+ */
+export function extractAuthContext(event: APIGatewayProxyEventV2): AuthResult {
+  // The base APIGatewayEventRequestContextV2 type does not include authorizer,
+  // because it only exists when a JWT/Lambda/IAM authorizer is configured.
+  // We safely access it via a type assertion since this is defense-in-depth:
+  // if the authorizer isn't configured, we correctly return 401.
+  // Cast through unknown since the base request context type doesn't include authorizer
+  const requestContext = event.requestContext as unknown as Record<string, unknown>;
+  const authorizer = requestContext['authorizer'] as JwtAuthorizerContext | undefined;
+
+  if (!authorizer) {
+    return unauthorizedResponse();
+  }
+
+  // Check that the JWT claims object exists
+  const jwt = authorizer.jwt;
+  if (!jwt || !jwt.claims) {
+    return unauthorizedResponse();
+  }
+
+  const claims = jwt.claims;
+
+  // Validate all required claims are present and non-empty
+  for (const claim of REQUIRED_CLAIMS) {
+    const value = claims[claim];
+    if (!value || value.trim().length === 0) {
+      return unauthorizedResponse();
+    }
+  }
+
+  // Validate role is a recognized value
+  const role = claims['custom:role'];
+  if (!VALID_ROLES.has(role)) {
+    return unauthorizedResponse();
+  }
+
+  // Build the authenticated context
+  const context: AuthContext = {
+    userId: claims['sub'],
+    accountId: claims['custom:accountId'],
+    email: claims['email'],
+    displayName: claims['custom:displayName'] ?? '',
+    role: role as AuthContext['role'],
+  };
+
+  return { success: true, context };
 }

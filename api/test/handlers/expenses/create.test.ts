@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import type { AuthResult, AuthContext } from '../../../src/middleware/auth.js';
+import { extractAuthContext } from '../../../src/middleware/auth.js';
 import type { ExpenseRepository } from '../../../src/lib/dynamo.js';
 import type { CreateExpenseInput, Expense, ApiError } from '../../../src/lib/types.js';
 import { createCreateExpenseHandler } from '../../../src/handlers/expenses/create.js';
@@ -667,6 +668,84 @@ describe('createCreateExpenseHandler', () => {
       const responseBody = JSON.parse(result.body as string) as ApiError;
       expect(responseBody.code).toBe('FORBIDDEN');
       expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('defense-in-depth: extractAuthContext with API Gateway authorizer (#63)', () => {
+    /**
+     * Build event with API Gateway JWT authorizer context for defense-in-depth tests.
+     */
+    function makeEventWithAuthorizer(
+      body: string | undefined,
+      claims: Record<string, string> | undefined,
+    ): APIGatewayProxyEventV2 {
+      const event = makeEvent(body);
+      if (claims) {
+        (event.requestContext as Record<string, unknown>)['authorizer'] = {
+          jwt: { claims, scopes: [] },
+        };
+      } else {
+        (event.requestContext as Record<string, unknown>)['authorizer'] = undefined;
+      }
+      return event;
+    }
+
+    it('returns 401 when authorizer context is missing and extractAuthContext is used', async () => {
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: (event: APIGatewayProxyEventV2) => Promise.resolve(extractAuthContext(event)),
+      });
+
+      const event = makeEventWithAuthorizer(JSON.stringify(makeValidBody()), undefined);
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(401);
+      const responseBody = JSON.parse(result.body as string) as { message: string };
+      expect(responseBody.message).toBe('Unauthorized');
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('returns 401 when JWT claims have no sub and extractAuthContext is used', async () => {
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: (event: APIGatewayProxyEventV2) => Promise.resolve(extractAuthContext(event)),
+      });
+
+      const claims = {
+        email: 'alice@example.com',
+        'custom:accountId': 'acct_01HXYZ',
+        'custom:displayName': 'Alice Smith',
+        'custom:role': 'owner',
+      };
+      const event = makeEventWithAuthorizer(JSON.stringify(makeValidBody()), claims);
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(401);
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('succeeds when valid authorizer context is present via extractAuthContext', async () => {
+      mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>
+        Promise.resolve(makeMockExpense(input)),
+      );
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: (event: APIGatewayProxyEventV2) => Promise.resolve(extractAuthContext(event)),
+      });
+
+      const claims = {
+        sub: 'user-alice-sub',
+        email: 'alice@example.com',
+        'custom:accountId': 'acct_01HXYZ',
+        'custom:displayName': 'Alice Smith',
+        'custom:role': 'owner',
+      };
+      const event = makeEventWithAuthorizer(JSON.stringify(makeValidBody()), claims);
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+      expect(mockRepo.createExpense).toHaveBeenCalledTimes(1);
     });
   });
 });
