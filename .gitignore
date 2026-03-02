@@ -4,6 +4,7 @@ dist
 .env
 .env.*
 !.env.deploy.example
+!web/.env.test
 coverage
 *.js.map
 .vite
@@ -21,3 +22,7 @@ cdk.context.json
 # Environment-specific deployment config (domains, hosted zones, account IDs)
 # Copy .env.deploy.example to .env.deploy and fill in your values
 .env.deploy
+
+# Deployment-specific URLs and resource IDs (per-deployment, never committed)
+# Copy deployment.env.example to deployment.env and fill in your values
+deployment.env
