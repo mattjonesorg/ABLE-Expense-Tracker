@@ -1,4 +1,6 @@
 packages:
-  - 'infra'
-  - 'api'
-  - 'web'
+  - infra
+  - api
+  - web
+
+onlyBuiltDependencies: esbuild
