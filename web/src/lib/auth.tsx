@@ -38,6 +38,19 @@ type AuthContextValue = AuthState & AuthActions;
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/**
+ * Get the current Cognito ID token for API authorization.
+ * Reads from sessionStorage via the cognito module.
+ * Returns null if the user is not authenticated or token is expired.
+ */
+export function getIdToken(): string | null {
+  const tokens = loadTokens();
+  if (tokens && !isTokenExpired(tokens.idToken)) {
+    return tokens.idToken;
+  }
+  return null;
+}
+
 interface AuthProviderProps {
   children: ReactNode;
 }
