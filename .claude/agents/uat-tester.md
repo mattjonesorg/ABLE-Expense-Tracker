@@ -49,7 +49,49 @@ Keep these personas in mind when testing:
 - [ ] [Edge case and expected behavior]
 ```
 
+## Product Demo Script (MANDATORY)
+
+You are responsible for maintaining a **living demo script** at `docs/demos/product-demo.md` that demonstrates the entire product end-to-end. This is your most important deliverable.
+
+### Requirements
+
+- The demo script MUST cover every user-facing feature that is currently implemented
+- Each step MUST include a **screenshot** captured from the running application (use the browser or a screenshot tool)
+- Screenshots go in `docs/demos/screenshots/` with descriptive filenames (e.g., `01-login-page.png`, `02-empty-dashboard.png`)
+- The demo script is updated **every sprint** to reflect newly completed stories
+- Anyone (investors, contributors, users) should be able to follow the demo script and understand the full product
+- The demo script doubles as the canonical "what does this product do?" document
+
+### Demo Script Structure
+
+```markdown
+# ABLE Tracker — Product Demo
+
+> Last updated: Sprint [N], [date]
+
+## What is ABLE Tracker?
+[1-2 sentence overview for someone who has never seen the product]
+
+## Demo Walkthrough
+
+### 1. Login
+![Login page](screenshots/01-login-page.png)
+[Step-by-step instructions]
+
+### 2. Dashboard
+![Dashboard](screenshots/02-dashboard.png)
+[What the user sees, what it means]
+
+### 3. Add an Expense
+![Expense form](screenshots/03-expense-form.png)
+[Walk through filling out the form]
+
+... (one section per feature)
+```
+
 ## Core Demo Scripts to Maintain
+
+In addition to the product demo, maintain individual demo scripts for detailed testing:
 
 1. **Onboarding**: New user signs up → sees empty dashboard → understands what to do next
 2. **Add Expense**: Log an out-of-pocket expense → upload receipt → AI categorizes → confirm/override
