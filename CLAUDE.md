@@ -142,7 +142,7 @@ This project uses a 12-agent team. See `.claude/agents/` for individual agent de
 | Backend Engineer | Lambda handlers, DynamoDB, Claude integration | `api/` |
 | DevOps Engineer | CDK infrastructure, CI/CD pipelines | `infra/`, `.github/workflows/` |
 | QA Engineer | Test strategy, coverage, **pre-commit review gate** | `**/test/`, test utilities |
-| UAT Tester | User advocacy, demo scripts, acceptance testing | `docs/demos/`, acceptance criteria verification |
+| UAT Tester | User advocacy, **product demo script with screenshots**, acceptance testing | `docs/demos/`, `docs/demos/screenshots/`, acceptance criteria verification |
 | Security Reviewer | Auth, data protection, IAM, PII, **pre-commit review gate** | Security-sensitive code across all packages |
 | Technical Writer | Documentation quality and completeness | `docs/`, `README.md`, inline docs |
 | Code Reviewer | Engineering standards enforcement | PR reviews, code quality gates |
@@ -156,7 +156,7 @@ This project uses a 12-agent team. See `.claude/agents/` for individual agent de
 2. **Architecture Planning** (L/XL only): Senior Architect produces implementation plan (API contracts, data model, component breakdown, test strategy). Architect does NOT implement.
 3. **Development**: Implementing agents work on assigned issues following TDD. Backend and Frontend can work in parallel on agreed interfaces.
 4. **Pre-Commit Review Gate**: Before any implementation is committed, **both** Security Reviewer and QA Engineer must review and approve. CRITICAL/HIGH findings block the commit.
-5. **Sprint-End UAT Review**: UAT Tester reviews ALL completed stories from the user's perspective and submits a Sprint UAT Report. Accessibility Engineer verifies UI stories.
+5. **Sprint-End UAT Review** (MANDATORY — cannot be skipped): UAT Tester reviews ALL completed stories from the user's perspective, **updates the product demo script** (`docs/demos/product-demo.md`) **with screenshots of all implemented features**, and submits a Sprint UAT Report. Accessibility Engineer verifies UI stories.
 6. **Product Owner Triage**: Product Owner triages UAT findings — **blockers** must be fixed before sprint release, other findings go to backlog.
 7. **Retrospective**: Scrum Master facilitates. What worked? What didn't? Improve the process.
 

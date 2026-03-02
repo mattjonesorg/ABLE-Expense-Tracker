@@ -37,11 +37,22 @@ Before any implementation is committed, the following reviews MUST pass:
 3. Both agents report findings. Any CRITICAL or HIGH issues block the commit until resolved.
 4. Only after both agents approve does the work proceed to commit.
 
+### Sprint-End UAT Review (MANDATORY)
+Before the sprint is considered releasable, the UAT Tester MUST:
+1. Review ALL completed stories from the user's perspective
+2. Update the **product demo script** (`docs/demos/product-demo.md`) with screenshots of all implemented features
+3. Run demo scripts against the deployed application
+4. Submit a Sprint UAT Report to the Product Owner
+5. Product Owner triages findings — blockers must be fixed before release
+
+This step CANNOT be skipped. A sprint without UAT review is not complete.
+
 ### Sprint Review
 1. Collect completed work from all agents
 2. Verify Definition of Done checklist for each issue
-3. Run UAT demo scripts to confirm acceptance
-4. Close completed issues
+3. Confirm UAT Tester has submitted the Sprint UAT Report
+4. Product Owner has triaged all UAT findings (blockers resolved, others backlogged)
+5. Close completed issues
 
 ### Retrospective
 1. What went well?
