@@ -130,6 +130,19 @@ describe('ApiStack', () => {
       template.resourceCountIs('AWS::Lambda::Function', 7);
     });
 
+    it('does not use placeholder inline code for any Lambda function (#74)', () => {
+      const functions = template.findResources('AWS::Lambda::Function');
+      const functionKeys = Object.keys(functions);
+
+      for (const key of functionKeys) {
+        const code = functions[key].Properties.Code;
+        // NodejsFunction uses S3Bucket/S3Key (asset-based code), not ZipFile (inline code)
+        expect(code).not.toHaveProperty('ZipFile');
+        expect(code).toHaveProperty('S3Bucket');
+        expect(code).toHaveProperty('S3Key');
+      }
+    });
+
     it('uses Node.js 20 runtime for all Lambda functions', () => {
       const functions = template.findResources('AWS::Lambda::Function');
       const functionKeys = Object.keys(functions);

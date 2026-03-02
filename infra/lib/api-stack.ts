@@ -3,6 +3,7 @@ import * as cognito from 'aws-cdk-lib/aws-cognito';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import {
   HttpApi,
   HttpMethod,
@@ -11,6 +12,14 @@ import {
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import { Construct } from 'constructs';
+import { fileURLToPath } from 'node:url';
+import * as path from 'node:path';
+
+/** Resolve __dirname for ESM modules. */
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+/** Absolute path to the API handler source directory. */
+const HANDLERS_DIR = path.join(__dirname, '../../api/src/handlers');
 
 /** Local development origin — always included in CORS allowed origins. */
 const LOCAL_DEV_ORIGIN = 'http://localhost:5173';
@@ -47,14 +56,18 @@ interface RouteDefinition {
   readonly path: string;
   /** Description for the Lambda function */
   readonly description: string;
+  /** Path to the handler entry point TypeScript file */
+  readonly entry: string;
   /** Whether this Lambda needs S3 read/write access */
   readonly needsS3Write?: boolean;
+  /** Whether this Lambda needs the ANTHROPIC_API_KEY env var */
+  readonly needsAnthropicKey?: boolean;
 }
 
 /**
  * ApiStack provisions the API layer for ABLE Tracker:
  * - An HTTP API (API Gateway v2) with CORS
- * - Lambda functions for each endpoint
+ * - Lambda functions for each endpoint (bundled with esbuild via NodejsFunction)
  * - IAM grants for DynamoDB and S3 access
  */
 export class ApiStack extends cdk.Stack {
@@ -102,42 +115,50 @@ export class ApiStack extends cdk.Stack {
         method: HttpMethod.POST,
         path: '/expenses',
         description: 'Create a new expense',
+        entry: path.join(HANDLERS_DIR, 'expenses/create.handler.ts'),
       },
       {
         id: 'ListExpenses',
         method: HttpMethod.GET,
         path: '/expenses',
         description: 'List all expenses',
+        entry: path.join(HANDLERS_DIR, 'expenses/list.handler.ts'),
       },
       {
         id: 'GetExpense',
         method: HttpMethod.GET,
         path: '/expenses/{id}',
         description: 'Get a single expense by ID',
+        entry: path.join(HANDLERS_DIR, 'expenses/get.handler.ts'),
       },
       {
         id: 'CategorizeExpense',
         method: HttpMethod.POST,
         path: '/expenses/categorize',
         description: 'AI-assisted expense categorization',
+        entry: path.join(HANDLERS_DIR, 'categorize/categorize.handler.ts'),
+        needsAnthropicKey: true,
       },
       {
         id: 'ReimburseExpense',
         method: HttpMethod.PUT,
         path: '/expenses/{id}/reimburse',
         description: 'Mark an expense as reimbursed',
+        entry: path.join(HANDLERS_DIR, 'stub.handler.ts'),
       },
       {
         id: 'DashboardReimbursements',
         method: HttpMethod.GET,
         path: '/dashboard/reimbursements',
         description: 'Reimbursement summary dashboard',
+        entry: path.join(HANDLERS_DIR, 'stub.handler.ts'),
       },
       {
         id: 'RequestUploadUrl',
         method: HttpMethod.POST,
         path: '/uploads/request-url',
         description: 'Request a presigned URL for receipt upload',
+        entry: path.join(HANDLERS_DIR, 'uploads/request-url.handler.ts'),
         needsS3Write: true,
       },
     ] as const;
@@ -150,16 +171,33 @@ export class ApiStack extends cdk.Stack {
       NODE_OPTIONS: '--enable-source-maps',
     };
 
+    // --- Resolve Anthropic API key from CDK context ---
+    const anthropicApiKey = this.node.tryGetContext('anthropicApiKey') as
+      | string
+      | undefined;
+
     // --- Create Lambda functions and wire routes ---
     for (const route of routes) {
-      const fn = new lambda.Function(this, `${route.id}Function`, {
+      const environment: Record<string, string> = { ...sharedEnvironment };
+
+      // Add ANTHROPIC_API_KEY for the categorize handler
+      if (route.needsAnthropicKey && anthropicApiKey) {
+        environment['ANTHROPIC_API_KEY'] = anthropicApiKey;
+      }
+
+      const fn = new NodejsFunction(this, `${route.id}Function`, {
+        entry: route.entry,
         runtime: lambda.Runtime.NODEJS_20_X,
-        handler: 'index.handler',
-        code: lambda.Code.fromInline('exports.handler = async () => ({ statusCode: 200 });'),
+        handler: 'handler',
         description: route.description,
         timeout: cdk.Duration.seconds(30),
         memorySize: 256,
-        environment: sharedEnvironment,
+        environment,
+        bundling: {
+          minify: true,
+          sourceMap: true,
+          target: 'node20',
+        },
       });
 
       // Grant DynamoDB read/write to all Lambda functions
