@@ -16,8 +16,8 @@ ABLE Tracker is an open-source Progressive Web App (PWA) for managing qualified 
 
 | Component | URL |
 |-----------|-----|
-| Frontend  | https://d360ri42g0q6k2.cloudfront.net |
-| API       | https://04xlqwybf6.execute-api.us-east-1.amazonaws.com |
+| Frontend  | `<your-cloudfront-url>` (see `deployment.env.example`) |
+| API       | `<your-api-url>` (see `deployment.env.example`) |
 | Auth      | AWS Cognito (username/password) |
 
 ---
@@ -71,7 +71,7 @@ All application pages (Dashboard, Expenses, Add Expense) are protected. Unauthen
 - [ ] Navigating to `/` without a session redirects to `/login`
 - [ ] Navigating to `/expenses` without a session redirects to `/login`
 - [ ] Navigating to `/expenses/new` without a session redirects to `/login`
-- [ ] After logging in, the user reaches the originally requested page
+- [ ] After logging in, the user is redirected to the Dashboard
 
 ---
 
@@ -103,7 +103,7 @@ The Dashboard is the landing page after login. It greets the user by name and pr
 
 ### 4. Navigation
 
-![Sidebar navigation](screenshots/04-navigation-sidebar.png)
+![Sidebar navigation](screenshots/04-navigation.png)
 
 The app uses a sidebar navigation layout with a fixed header. On mobile, the sidebar collapses behind a hamburger menu.
 
@@ -125,6 +125,8 @@ The app uses a sidebar navigation layout with a fixed header. On mobile, the sid
 
 **Mobile behavior:**
 
+![Mobile navigation](screenshots/09-mobile-nav.png)
+
 1. Resize your browser window to a narrow width (below the `sm` breakpoint).
 2. The sidebar collapses and a hamburger icon appears in the header.
 3. Tap the hamburger to open/close the sidebar as an overlay.
@@ -142,7 +144,7 @@ The app uses a sidebar navigation layout with a fixed header. On mobile, the sid
 
 ### 5. Add Expense Form
 
-![Add Expense form](screenshots/05-add-expense-form.png)
+![Add Expense form](screenshots/05-expense-form.png)
 
 This is the core data entry form where authorized representatives record qualified ABLE expenses.
 
@@ -183,8 +185,6 @@ This is the core data entry form where authorized representatives record qualifi
 - Vendor, Description, and Paid By must not be empty
 - Amount must be greater than zero
 - Date must not be in the future
-
-![Form validation errors](screenshots/05b-form-validation.png)
 
 **Verification:**
 - [ ] All required fields show error messages when submitted empty
@@ -284,7 +284,7 @@ The filter bar at the top of the table provides three filter controls:
 
 **Empty state:**
 
-![Empty expense list](screenshots/07b-expense-list-empty.png)
+![Empty expense list](screenshots/08-expense-list-empty.png)
 
 If no expenses have been recorded yet, the page shows a friendly empty state with a receipt icon and the message: "No expenses yet. Add your first expense to get started." with a link to the Add Expense form.
 
@@ -304,7 +304,7 @@ If no expenses have been recorded yet, the page shows a friendly empty state wit
 
 ### 8. Logout
 
-![Logout](screenshots/08-logout.png)
+![Logout](screenshots/10-logout.png)
 
 **Steps:**
 
@@ -436,7 +436,7 @@ The app is responsive (sidebar collapses on narrow screens), but has not been op
 
 ### Steps
 
-1. Open https://d360ri42g0q6k2.cloudfront.net in your browser.
+1. Open your CloudFront URL in your browser (see `deployment.env.example` for how to find it).
 2. Log in with your credentials.
 3. Explore the Dashboard, navigate between pages, and try the Add Expense form.
 4. After API deployment (PR #76), test the full flow: create expenses, use AI categorization, and view the expense list.

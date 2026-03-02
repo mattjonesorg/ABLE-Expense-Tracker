@@ -1,11 +1,19 @@
 /**
  * Environment configuration for the ABLE Tracker frontend.
- * Reads from Vite environment variables with sensible defaults
- * for the deployed ABLE Tracker infrastructure.
+ *
+ * All deployment-specific values are read from VITE_* environment variables.
+ * There are NO hardcoded defaults -- each deployer must configure their own
+ * values. See deployment.env.example in the repo root for documentation.
+ *
+ * For local development, create a web/.env.local file with:
+ *   VITE_COGNITO_USER_POOL_ID=us-east-1_XXXXXXXXX
+ *   VITE_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxx
+ *   VITE_AWS_REGION=us-east-1
+ *   VITE_API_URL=https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com
  */
 
 export interface CognitoConfig {
-  /** Cognito User Pool ID (e.g., us-east-1_opSjkMtF1) */
+  /** Cognito User Pool ID (e.g., us-east-1_XXXXXXXXX) */
   userPoolId: string;
   /** Cognito App Client ID */
   clientId: string;
@@ -16,18 +24,30 @@ export interface CognitoConfig {
 }
 
 /**
- * Returns the Cognito configuration, reading from VITE_ environment
- * variables with fallback defaults for the deployed infrastructure.
+ * Reads a required VITE_* environment variable. Throws a clear error
+ * if the variable is not set, pointing the developer to the setup docs.
+ */
+function requireEnv(name: string): string {
+  const value = import.meta.env[name] as string | undefined;
+  if (!value) {
+    throw new Error(
+      `Missing required environment variable: ${name}. ` +
+        `Copy deployment.env.example to deployment.env and set your values, ` +
+        `then create web/.env.local with the corresponding VITE_* variables. ` +
+        `See deployment.env.example for details.`
+    );
+  }
+  return value;
+}
+
+/**
+ * Returns the Cognito configuration, reading from VITE_* environment
+ * variables. Throws if any required variable is missing.
  */
 export function getCognitoConfig(): CognitoConfig {
-  const userPoolId =
-    (import.meta.env.VITE_COGNITO_USER_POOL_ID as string | undefined) ??
-    'us-east-1_opSjkMtF1';
-  const clientId =
-    (import.meta.env.VITE_COGNITO_CLIENT_ID as string | undefined) ??
-    '75cl182936abdsr5b4ur97afs8';
-  const region =
-    (import.meta.env.VITE_AWS_REGION as string | undefined) ?? 'us-east-1';
+  const userPoolId = requireEnv('VITE_COGNITO_USER_POOL_ID');
+  const clientId = requireEnv('VITE_COGNITO_CLIENT_ID');
+  const region = requireEnv('VITE_AWS_REGION');
 
   return {
     userPoolId,
@@ -38,6 +58,4 @@ export function getCognitoConfig(): CognitoConfig {
 }
 
 /** Base URL for the ABLE Tracker API (no trailing slash) */
-export const API_URL: string =
-  (import.meta.env['VITE_API_URL'] as string | undefined) ??
-  'https://04xlqwybf6.execute-api.us-east-1.amazonaws.com';
+export const API_URL: string = requireEnv('VITE_API_URL');
