@@ -6,7 +6,7 @@
  * Replaces the previous mock implementation as part of issue #54.
  */
 
-import type { Expense, AbleCategory, CategoryResult } from './types';
+import type { Expense, AbleCategory, CategoryResult, ReimbursementSummary } from './types';
 import { API_URL } from './config';
 import { getIdToken } from './auth';
 
@@ -178,6 +178,7 @@ export async function listExpenses(filters?: ListExpensesFilters): Promise<Expen
   return [];
 }
 
+
 export async function getExpense(id: string): Promise<Expense> {
   const response = await apiRequest(`/expenses/${encodeURIComponent(id)}`, { method: 'GET' });
   return (await safeParseJson(response)) as Expense;
@@ -199,4 +200,30 @@ export async function categorizeExpense(data: CategorizeInput): Promise<Category
 export async function reimburseExpense(id: string): Promise<Expense> {
   const response = await apiRequest(`/expenses/${encodeURIComponent(id)}/reimburse`, { method: 'POST' });
   return (await safeParseJson(response)) as Expense;
+}
+
+/**
+ * Fetch reimbursement summaries for the dashboard.
+ * Calls GET /dashboard/reimbursements.
+ */
+export async function getReimbursementSummaries(): Promise<ReimbursementSummary[]> {
+  const response = await apiRequest('/dashboard/reimbursements', {
+    method: 'GET',
+  });
+  const data: unknown = await safeParseJson(response);
+
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    'summaries' in data &&
+    Array.isArray((data as Record<string, unknown>)['summaries'])
+  ) {
+    return (data as { summaries: ReimbursementSummary[] }).summaries;
+  }
+
+  if (Array.isArray(data)) {
+    return data as ReimbursementSummary[];
+  }
+
+  return [];
 }
