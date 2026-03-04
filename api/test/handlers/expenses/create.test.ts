@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import type { AuthResult, AuthContext } from '../../../src/middleware/auth.js';
 import { extractAuthContext } from '../../../src/middleware/auth.js';
@@ -321,6 +321,64 @@ describe('createCreateExpenseHandler', () => {
 
     it('rejects zero amount — returns 400', async () => {
       const body = makeValidBody({ amount: 0 });
+
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('VALIDATION_ERROR');
+      expect(responseBody.error).toMatch(/amount/i);
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('rejects amount exceeding upper bound (10,000,000 cents / $100,000) — returns 400', async () => {
+      const body = makeValidBody({ amount: 10_000_001 });
+
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('VALIDATION_ERROR');
+      expect(responseBody.error).toMatch(/amount/i);
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('accepts amount exactly at upper bound (10,000,000 cents / $100,000)', async () => {
+      const body = makeValidBody({ amount: 10_000_000 });
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+      mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>
+        Promise.resolve(makeMockExpense(input)),
+      );
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+    });
+
+    it('rejects non-integer amount (float) — returns 400', async () => {
+      const body = makeValidBody({ amount: 99.5 });
 
       mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
 
