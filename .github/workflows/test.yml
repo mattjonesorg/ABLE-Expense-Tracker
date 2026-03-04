@@ -28,5 +28,8 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Validate Claude Code hooks format
+        run: node scripts/validate-hooks.mjs
+
       - name: Test
         run: pnpm test
