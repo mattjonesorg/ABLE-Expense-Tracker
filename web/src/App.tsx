@@ -5,6 +5,7 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Expenses } from './pages/Expenses';
 import { ExpenseForm } from './pages/ExpenseForm';
+import { Reimbursements } from './pages/Reimbursements';
 
 export function App() {
   return (
@@ -19,6 +20,7 @@ export function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/expenses/new" element={<ExpenseForm />} />
+            <Route path="/reimbursements" element={<Reimbursements />} />
           </Route>
 
           {/* Catch-all redirect */}
