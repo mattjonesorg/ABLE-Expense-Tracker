@@ -10,6 +10,7 @@ import {
   Title,
   Stack,
   Group,
+  Text,
 } from '@mantine/core';
 import { DateInput } from '@mantine/dates';
 import { useForm } from '@mantine/form';
@@ -20,6 +21,16 @@ import { ABLE_CATEGORIES } from '../lib/types';
 import type { AbleCategory } from '../lib/types';
 import { createExpense, categorizeExpense } from '../lib/api';
 
+/**
+ * Maximum character limits matching backend validation (#41).
+ * Exported for use in tests.
+ */
+export const FIELD_LIMITS = {
+  vendor: 200,
+  description: 1000,
+  paidBy: 100,
+} as const;
+
 interface ExpenseFormValues {
   vendor: string;
   description: string;
@@ -28,6 +39,17 @@ interface ExpenseFormValues {
   paidBy: string;
   category: string | null;
   receipt: File | null;
+}
+
+/** Render a character counter like "5/200" below a field */
+function CharCounter({ current, max }: { current: number; max: number }) {
+  const ratio = current / max;
+  const color = ratio >= 0.9 ? 'red' : undefined;
+  return (
+    <Text size="xs" c={color}>
+      {current}/{max}
+    </Text>
+  );
 }
 
 export function ExpenseForm() {
@@ -46,10 +68,18 @@ export function ExpenseForm() {
       receipt: null,
     },
     validate: {
-      vendor: (value) =>
-        value.trim().length === 0 ? 'Vendor is required' : null,
-      description: (value) =>
-        value.trim().length === 0 ? 'Description is required' : null,
+      vendor: (value) => {
+        if (value.trim().length === 0) return 'Vendor is required';
+        if (value.length > FIELD_LIMITS.vendor)
+          return `Vendor must be ${FIELD_LIMITS.vendor} characters or fewer`;
+        return null;
+      },
+      description: (value) => {
+        if (value.trim().length === 0) return 'Description is required';
+        if (value.length > FIELD_LIMITS.description)
+          return `Description must be ${FIELD_LIMITS.description} characters or fewer`;
+        return null;
+      },
       amount: (value) => {
         if (value === '' || value === undefined || value === null) {
           return 'Amount is required';
@@ -70,8 +100,12 @@ export function ExpenseForm() {
         }
         return null;
       },
-      paidBy: (value) =>
-        value.trim().length === 0 ? 'Paid by is required' : null,
+      paidBy: (value) => {
+        if (value.trim().length === 0) return 'Paid by is required';
+        if (value.length > FIELD_LIMITS.paidBy)
+          return `Paid by must be ${FIELD_LIMITS.paidBy} characters or fewer`;
+        return null;
+      },
     },
   });
 
@@ -175,6 +209,13 @@ export function ExpenseForm() {
               placeholder="e.g., University Bookstore"
               withAsterisk
               aria-required="true"
+              maxLength={FIELD_LIMITS.vendor}
+              description={
+                <CharCounter
+                  current={form.values.vendor.length}
+                  max={FIELD_LIMITS.vendor}
+                />
+              }
               {...form.getInputProps('vendor')}
             />
 
@@ -184,6 +225,13 @@ export function ExpenseForm() {
               withAsterisk
               aria-required="true"
               minRows={3}
+              maxLength={FIELD_LIMITS.description}
+              description={
+                <CharCounter
+                  current={form.values.description.length}
+                  max={FIELD_LIMITS.description}
+                />
+              }
               {...form.getInputProps('description')}
             />
 
@@ -213,6 +261,13 @@ export function ExpenseForm() {
               placeholder="Who paid out-of-pocket?"
               withAsterisk
               aria-required="true"
+              maxLength={FIELD_LIMITS.paidBy}
+              description={
+                <CharCounter
+                  current={form.values.paidBy.length}
+                  max={FIELD_LIMITS.paidBy}
+                />
+              }
               {...form.getInputProps('paidBy')}
             />
 
