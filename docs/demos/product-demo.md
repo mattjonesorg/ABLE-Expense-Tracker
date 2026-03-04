@@ -1,6 +1,6 @@
 # ABLE Tracker -- Product Demo
 
-> Last updated: Sprint 3, 2026-03-02 (post-deployment)
+> Last updated: Sprint 4, 2026-03-04 (post-deployment)
 
 ## What is ABLE Tracker?
 
@@ -79,7 +79,7 @@ All application pages (Dashboard, Expenses, Add Expense) are protected. Unauthen
 
 ![Dashboard](screenshots/03-dashboard.png)
 
-The Dashboard is the landing page after login. It greets the user by name and provides quick-action cards for common tasks.
+The Dashboard is the landing page after login. It greets the user by name, provides quick-action cards for common tasks, shows a reimbursement summary, and lists recent expenses.
 
 **Steps:**
 
@@ -88,16 +88,27 @@ The Dashboard is the landing page after login. It greets the user by name and pr
 3. See two quick-action cards:
    - **"Add Expense"** -- Record a new qualified ABLE expense
    - **"View Expenses"** -- Browse and manage your expenses
+4. Below the quick actions, the **Reimbursements** section shows:
+   - **Total Unreimbursed** -- The aggregate amount owed across all payers
+   - Per-person cards showing each payer's name, amount owed, and expense count
+5. The **Recent Expenses** section shows the 5 most recent expenses with vendor, date, and amount.
 
 **What happens:**
 - The display name is extracted from your Cognito JWT token claims.
-- Each card is a clickable link that navigates to the corresponding page.
+- Each quick-action card is a clickable link that navigates to the corresponding page.
+- Reimbursement summaries are fetched from the `/dashboard/reimbursements` API endpoint.
+- Recent expenses are fetched from `/expenses` and trimmed to the 5 most recent.
+- If no expenses exist, an empty state is shown with a link to add the first expense.
 
 **Verification:**
 - [ ] Dashboard displays "Welcome, [name]" with the logged-in user's display name
 - [ ] "Add Expense" card links to `/expenses/new`
 - [ ] "View Expenses" card links to `/expenses`
 - [ ] Cards are visually distinct with icons (blue plus icon, teal receipt icon)
+- [ ] Reimbursements section shows total unreimbursed amount
+- [ ] Per-person reimbursement cards show name, amount, and expense count
+- [ ] Recent Expenses section shows up to 5 expenses with vendor, date, and amount
+- [ ] Empty state shows a friendly message with a link to add an expense
 
 ---
 
@@ -114,11 +125,12 @@ The app uses a sidebar navigation layout with a fixed header. On mobile, the sid
 **Sidebar links:**
 - **Dashboard** (home icon) -- `/`
 - **Expenses** (receipt icon) -- `/expenses`
+- **Reimbursements** (cash icon) -- `/reimbursements`
 - **New Expense** (plus icon) -- `/expenses/new`
 
 **Steps:**
 
-1. From any page, observe the sidebar on the left with three navigation links.
+1. From any page, observe the sidebar on the left with four navigation links.
 2. Click each link to navigate between pages.
 3. On the header, observe your display name and the Logout button.
 4. Click **Logout** to end your session and return to the login page.
@@ -132,7 +144,7 @@ The app uses a sidebar navigation layout with a fixed header. On mobile, the sid
 3. Tap the hamburger to open/close the sidebar as an overlay.
 
 **Verification:**
-- [ ] Three navigation links are visible: Dashboard, Expenses, New Expense
+- [ ] Four navigation links are visible: Dashboard, Expenses, Reimbursements, New Expense
 - [ ] Active page is visually highlighted in the sidebar
 - [ ] Clicking a link navigates to the correct page
 - [ ] Display name appears in the header
@@ -152,11 +164,11 @@ This is the core data entry form where authorized representatives record qualifi
 
 | Field       | Type          | Required | Notes |
 |-------------|---------------|----------|-------|
-| Vendor      | Text input    | Yes      | e.g., "University Bookstore" |
-| Description | Text area     | Yes      | Describe what the expense was for |
-| Amount      | Number input  | Yes      | Entered in dollars (e.g., $75.00), converted to cents internally |
+| Vendor      | Text input    | Yes      | e.g., "University Bookstore" (max 200 characters) |
+| Description | Text area     | Yes      | Describe what the expense was for (max 1,000 characters) |
+| Amount      | Number input  | Yes      | Entered in dollars (e.g., $75.00), converted to cents internally. Max $1,000,000 |
 | Date        | Date picker   | Yes      | Defaults to today; cannot be a future date |
-| Paid By     | Text input    | Yes      | Who paid out-of-pocket for this expense |
+| Paid By     | Text input    | Yes      | Who paid out-of-pocket for this expense (max 100 characters) |
 | Category    | Select/AI     | No       | One of 11 ABLE categories; can be selected manually or suggested by AI |
 | Receipt     | File upload   | No       | Accepts images and PDFs (upload UI present, backend handler exists) |
 
@@ -183,12 +195,15 @@ This is the core data entry form where authorized representatives record qualifi
 
 **Validation rules:**
 - Vendor, Description, and Paid By must not be empty
-- Amount must be greater than zero
+- Vendor max 200 characters, Description max 1,000 characters, Paid By max 100 characters
+- Amount must be greater than zero and no more than $1,000,000
 - Date must not be in the future
 
 **Verification:**
 - [ ] All required fields show error messages when submitted empty
 - [ ] Amount field displays `$` prefix and formats to two decimal places
+- [ ] Amount rejects values over $1,000,000
+- [ ] Character limits enforced: Vendor (200), Description (1,000), Paid By (100)
 - [ ] Date picker defaults to today and blocks future dates
 - [ ] Category dropdown lists all 11 ABLE categories
 - [ ] Success notification appears after creating an expense
@@ -302,7 +317,49 @@ If no expenses have been recorded yet, the page shows a friendly empty state wit
 
 ---
 
-### 8. Logout
+### 8. Reimbursements
+
+![Reimbursements page](screenshots/11-reimbursements.png)
+
+The Reimbursements page provides a dedicated view of who is owed money and how much. It aggregates all unreimbursed expenses by payer and shows a summary with recent expense details.
+
+**Page sections:**
+
+1. **Total Unreimbursed** -- A prominent banner showing the aggregate unreimbursed amount across all payers
+2. **Per-person cards** -- Each card shows the payer's name, number of unreimbursed expenses, and total amount owed (displayed in red)
+3. **Recent Expenses table** -- The 5 most recent expenses with date, vendor, paid by, amount, and reimbursed status badge
+4. **Add Expense button** -- Quick action to create a new expense from this page
+
+**Steps:**
+
+1. Navigate to **Reimbursements** from the sidebar.
+2. Observe the **Total Unreimbursed** amount at the top.
+3. Review the per-person breakdown cards showing who is owed what.
+4. Scroll down to see the **Recent Expenses** table with reimbursement status badges.
+
+**What happens:**
+- All expenses are fetched from the API via `/expenses`.
+- The page filters out reimbursed expenses and aggregates the remaining by `paidBy` field.
+- Per-person cards are sorted by total owed (highest first).
+- The Recent Expenses table shows the 5 most recent expenses regardless of reimbursement status.
+
+**Empty states:**
+- If no expenses exist, a friendly message appears: "No expenses yet. Add your first expense to start tracking reimbursements."
+- If all expenses are reimbursed, a green "All caught up!" message appears.
+
+**Verification:**
+- [ ] Total Unreimbursed amount is displayed prominently
+- [ ] Per-person cards show payer name, expense count, and amount owed in red
+- [ ] Amount owed excludes reimbursed expenses
+- [ ] Recent Expenses table shows date, vendor, paid by, amount, and reimbursed badge
+- [ ] Reimbursed badge is green for "Yes" and gray for "No"
+- [ ] "Add Expense" button links to `/expenses/new`
+- [ ] Empty state shows when no expenses exist
+- [ ] "All caught up!" state shows when all expenses are reimbursed
+
+---
+
+### 9. Logout
 
 ![Logout](screenshots/10-logout.png)
 
@@ -353,22 +410,19 @@ All API endpoints require a valid Cognito JWT in the `Authorization: Bearer <tok
 
 - **API Gateway JWT authorizer** -- All routes require Cognito JWT validation before reaching Lambda
 - **Lambda-level auth validation** -- Defense-in-depth; handlers verify auth context independently
+- **Least-privilege IAM** -- Lambda roles use fine-grained DynamoDB permissions (specific actions on specific table/index ARNs) instead of broad wildcards
 - **CORS restriction** -- API only accepts requests from the deployed frontend domain and localhost
-- **Input validation** -- String length limits, amount validation, receipt key scoping
+- **Input validation** -- String length limits (vendor 200, description 1000, paidBy 100), amount validation (>0, max $1M), receipt key scoping
 - **Generic error messages** -- Auth failures return generic messages; no implementation details leaked
 - **Secret scanning** -- Pre-commit hook and CI pipeline scan for leaked secrets/credentials
 - **No PII to AI** -- Only vendor name and description are sent to the Claude API; no account numbers, SSNs, or personal data
+- **Post-deploy smoke tests** -- Automated CI pipeline validates all API endpoints after every deployment
 
 ---
 
 ## Coming Soon
 
 The following features are planned but not yet implemented:
-
-### Reimbursement Tracking (Issues #10, #16, #65)
-- **What**: Mark expenses as reimbursed, track who is owed what, dashboard summary showing total outstanding per person
-- **Why**: This closes the core workflow loop: log expense -> categorize -> reimburse
-- **Status**: Backend data model supports it (reimbursed/reimbursedAt fields exist); UI and API handler not yet built
 
 ### Receipt Upload UI
 - **What**: Frontend interface for attaching receipt photos/PDFs to expenses
@@ -430,7 +484,7 @@ The app is responsive (sidebar collapses on narrow screens), but has not been op
 1. Open your CloudFront URL in your browser (see `deployment.env.example` for how to find it).
 2. Log in with your credentials.
 3. Explore the Dashboard, navigate between pages, and try the Add Expense form.
-4. Test the full flow: create expenses, use AI categorization, and view the expense list.
+4. Test the full flow: create expenses, use AI categorization, view the expense list, and check the Reimbursements page.
 
 ### For Developers
 

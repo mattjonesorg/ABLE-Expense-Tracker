@@ -6,7 +6,6 @@ import {
   Stack,
   Paper,
   Table,
-  Badge,
   Skeleton,
   Group,
   Card,
@@ -67,7 +66,8 @@ export function Reimbursements() {
 
   const reimbursements = aggregateReimbursements(expenses);
   const totalUnreimbursed = reimbursements.reduce((sum, r) => sum + r.totalOwed, 0);
-  const recentExpenses = [...expenses]
+  const unreimbursedExpenses = [...expenses]
+    .filter((e) => !e.reimbursed)
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5);
   const allReimbursed = expenses.length > 0 && reimbursements.length === 0;
@@ -130,7 +130,7 @@ export function Reimbursements() {
             ))}
           </SimpleGrid>
 
-          <Title order={3}>Recent Expenses</Title>
+          <Title order={3}>Unreimbursed Expenses</Title>
           <Paper withBorder radius="md" style={{ overflow: 'auto' }}>
             <Table striped highlightOnHover>
               <Table.Thead>
@@ -139,25 +139,16 @@ export function Reimbursements() {
                   <Table.Th>Vendor</Table.Th>
                   <Table.Th>Paid By</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Amount</Table.Th>
-                  <Table.Th>Reimbursed</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {recentExpenses.map((expense) => (
+                {unreimbursedExpenses.map((expense) => (
                   <Table.Tr key={expense.expenseId}>
                     <Table.Td>{formatDate(expense.date)}</Table.Td>
                     <Table.Td>{expense.vendor}</Table.Td>
                     <Table.Td>{expense.paidBy}</Table.Td>
                     <Table.Td style={{ textAlign: 'right' }}>
                       {formatCents(expense.amount)}
-                    </Table.Td>
-                    <Table.Td>
-                      <Badge
-                        color={expense.reimbursed ? 'green' : 'gray'}
-                        variant="light"
-                      >
-                        {expense.reimbursed ? 'Yes' : 'No'}
-                      </Badge>
                     </Table.Td>
                   </Table.Tr>
                 ))}
