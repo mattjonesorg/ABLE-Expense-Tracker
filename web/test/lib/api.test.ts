@@ -7,7 +7,7 @@ const mockGetIdToken = vi.fn<() => string | null>();
 vi.mock('../../src/lib/auth', () => ({ getIdToken: () => mockGetIdToken() }));
 
 const apiModule = await import('../../src/lib/api');
-const { listExpenses, createExpense, categorizeExpense, getExpense, reimburseExpense, ApiAuthenticationError, ApiServerError, ApiNetworkError, ApiResponseParseError } = apiModule;
+const { listExpenses, createExpense, categorizeExpense, getExpense, reimburseExpense, getReimbursementSummaries, ApiAuthenticationError, ApiServerError, ApiNetworkError, ApiResponseParseError } = apiModule;
 
 type ExpenseFormInput = (typeof apiModule)['createExpense'] extends (data: infer T) => unknown ? T : never;
 
@@ -252,6 +252,55 @@ describe('API Client (real fetch calls)', () => {
     it('non-JSON 4xx errors show status-based fallback', async () => {
       fetchSpy.mockResolvedValue(new Response('Bad Request', { status: 400, headers: { 'content-type': 'text/plain' } }));
       await expect(listExpenses()).rejects.toThrow();
+    });
+  });
+
+  describe('getReimbursementSummaries', () => {
+    it('calls GET /dashboard/reimbursements', async () => {
+      const summaries = [
+        { userId: 'user1', displayName: 'John', totalOwed: 5000, expenseCount: 2 },
+      ];
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify({ summaries }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+      const result = await getReimbursementSummaries();
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('https://api.test.example.com/dashboard/reimbursements');
+      expect(init.method).toBe('GET');
+      expect(result).toEqual(summaries);
+    });
+
+    it('returns empty array when no summaries', async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify({ summaries: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+      const result = await getReimbursementSummaries();
+      expect(result).toEqual([]);
+    });
+
+    it('handles array response format', async () => {
+      const summaries = [
+        { userId: 'user1', displayName: 'John', totalOwed: 5000, expenseCount: 2 },
+      ];
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify(summaries), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      );
+
+      const result = await getReimbursementSummaries();
+      expect(result).toEqual(summaries);
     });
   });
 });
