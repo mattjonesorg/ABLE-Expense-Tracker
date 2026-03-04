@@ -32,9 +32,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build frontend
-        run: pnpm --filter web build
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -48,8 +45,25 @@ jobs:
             --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
           DIST_ID=$(aws cloudformation describe-stacks --stack-name AbleTracker-Hosting \
             --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
+          USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name AbleTracker-Auth \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
+          CLIENT_ID=$(aws cloudformation describe-stacks --stack-name AbleTracker-Auth \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
+          API_URL=$(aws cloudformation describe-stacks --stack-name AbleTracker-Api \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
           echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
           echo "distribution_id=$DIST_ID" >> "$GITHUB_OUTPUT"
+          echo "user_pool_id=$USER_POOL_ID" >> "$GITHUB_OUTPUT"
+          echo "client_id=$CLIENT_ID" >> "$GITHUB_OUTPUT"
+          echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Build frontend
+        run: pnpm --filter web build
+        env:
+          VITE_COGNITO_USER_POOL_ID: ${{ steps.stack.outputs.user_pool_id }}
+          VITE_COGNITO_CLIENT_ID: ${{ steps.stack.outputs.client_id }}
+          VITE_AWS_REGION: ${{ vars.AWS_REGION }}
+          VITE_API_URL: ${{ steps.stack.outputs.api_url }}
 
       - name: Deploy to S3
         run: aws s3 sync web/dist s3://${{ steps.stack.outputs.bucket }} --delete

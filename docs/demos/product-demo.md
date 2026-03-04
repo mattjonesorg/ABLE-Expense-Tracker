@@ -1,6 +1,6 @@
 # ABLE Tracker -- Product Demo
 
-> Last updated: Sprint 3, 2026-03-02
+> Last updated: Sprint 3, 2026-03-02 (post-deployment)
 
 ## What is ABLE Tracker?
 
@@ -342,9 +342,10 @@ ABLE Tracker runs on a fully automated AWS infrastructure, defined entirely in C
 | POST   | `/expenses` | Create a new expense |
 | GET    | `/expenses` | List expenses (with optional category/date filters) |
 | GET    | `/expenses/{id}` | Get a single expense by ID |
-| POST   | `/expenses/{id}/reimburse` | Mark an expense as reimbursed |
-| POST   | `/categorize` | AI categorization of an expense |
-| POST   | `/upload-url` | Get a presigned S3 URL for receipt upload |
+| POST   | `/expenses/categorize` | AI categorization of an expense |
+| PUT    | `/expenses/{id}/reimburse` | Mark an expense as reimbursed |
+| GET    | `/dashboard/reimbursements` | Reimbursement summary dashboard |
+| POST   | `/uploads/request-url` | Get a presigned S3 URL for receipt upload |
 
 All API endpoints require a valid Cognito JWT in the `Authorization: Bearer <token>` header. Requests without valid authentication receive a 401 response at the API Gateway level (defense-in-depth: Lambda handlers also validate auth context).
 
@@ -395,19 +396,9 @@ The following features are planned but not yet implemented:
 
 ## Known Limitations
 
-### API Deployment Gap (Issue #73, fixed in PR #76)
+### ~~API Deployment Gap (Issue #73, fixed in PR #76)~~ -- RESOLVED
 
-**Status: Fix merged, awaiting deployment**
-
-The Lambda functions are currently deployed with placeholder inline code that returns empty 200 responses. This means:
-
-- **GET /expenses** returns an empty list (the frontend handles this gracefully, showing "No expenses yet")
-- **POST /expenses** fails with a JSON parse error ("Unexpected end of JSON input") because the placeholder returns no body
-- **POST /categorize** returns empty -- AI categorization does not work against the live API
-
-PR #76 fixes this by replacing `Code.fromInline()` with `Code.fromAsset()` pointing to the compiled TypeScript handlers. Once deployed, all API endpoints will process real data.
-
-**Impact on this demo**: Until the fix is deployed, the live site shows the UI correctly but API operations (creating expenses, listing data, AI categorization) do not work end-to-end. The frontend, navigation, auth flow, and form UX can all be evaluated independently of the API.
+**Status: Fixed and deployed.** Lambda functions now use real TypeScript handlers bundled with esbuild via CDK `NodejsFunction`. All 7 API endpoints process real data. The CORS configuration includes the CloudFront domain so the frontend can communicate with the API.
 
 ### No Self-Registration
 
@@ -439,7 +430,7 @@ The app is responsive (sidebar collapses on narrow screens), but has not been op
 1. Open your CloudFront URL in your browser (see `deployment.env.example` for how to find it).
 2. Log in with your credentials.
 3. Explore the Dashboard, navigate between pages, and try the Add Expense form.
-4. After API deployment (PR #76), test the full flow: create expenses, use AI categorization, and view the expense list.
+4. Test the full flow: create expenses, use AI categorization, and view the expense list.
 
 ### For Developers
 

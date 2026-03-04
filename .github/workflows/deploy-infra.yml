@@ -42,10 +42,27 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      - name: Get CloudFront domain
+        id: hosting
+        run: |
+          DOMAIN=$(aws cloudformation describe-stacks --stack-name AbleTracker-Hosting \
+            --query "Stacks[0].Outputs[?OutputKey=='DistributionDomainName'].OutputValue" --output text 2>/dev/null || echo "")
+          echo "domain=$DOMAIN" >> "$GITHUB_OUTPUT"
+
       - name: CDK diff
         working-directory: infra
-        run: npx cdk diff --all
+        run: |
+          ORIGINS=""
+          if [ -n "${{ steps.hosting.outputs.domain }}" ]; then
+            ORIGINS="https://${{ steps.hosting.outputs.domain }}"
+          fi
+          npx cdk diff --all ${ORIGINS:+-c allowedOrigins=$ORIGINS}
 
       - name: CDK deploy
         working-directory: infra
-        run: npx cdk deploy --all --require-approval never
+        run: |
+          ORIGINS=""
+          if [ -n "${{ steps.hosting.outputs.domain }}" ]; then
+            ORIGINS="https://${{ steps.hosting.outputs.domain }}"
+          fi
+          npx cdk deploy --all --require-approval never ${ORIGINS:+-c allowedOrigins=$ORIGINS}
