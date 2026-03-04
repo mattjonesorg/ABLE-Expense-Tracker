@@ -154,6 +154,68 @@ describe('createCategorizeHandler', () => {
     expect(body.result).toBeNull();
   });
 
+  describe('amount validation (#45)', () => {
+    it('rejects negative amount — returns 400', async () => {
+      const authenticate = vi.fn().mockResolvedValue(successfulAuth);
+      const categorize = vi.fn();
+      const handler = createCategorizeHandler({ categorize, authenticate });
+      const event = makeEvent({ body: JSON.stringify({ vendor: 'Store', description: 'Item', amount: -100 }) });
+      const response = await handler(event);
+      expect(response.statusCode).toBe(400);
+      expect(categorize).not.toHaveBeenCalled();
+    });
+
+    it('rejects float amount — returns 400', async () => {
+      const authenticate = vi.fn().mockResolvedValue(successfulAuth);
+      const categorize = vi.fn();
+      const handler = createCategorizeHandler({ categorize, authenticate });
+      const event = makeEvent({ body: JSON.stringify({ vendor: 'Store', description: 'Item', amount: 99.5 }) });
+      const response = await handler(event);
+      expect(response.statusCode).toBe(400);
+      expect(categorize).not.toHaveBeenCalled();
+    });
+
+    it('rejects amount exceeding upper bound (10,000,000 cents) — returns 400', async () => {
+      const authenticate = vi.fn().mockResolvedValue(successfulAuth);
+      const categorize = vi.fn();
+      const handler = createCategorizeHandler({ categorize, authenticate });
+      const event = makeEvent({ body: JSON.stringify({ vendor: 'Store', description: 'Item', amount: 10_000_001 }) });
+      const response = await handler(event);
+      expect(response.statusCode).toBe(400);
+      expect(categorize).not.toHaveBeenCalled();
+    });
+
+    it('accepts amount exactly at upper bound (10,000,000 cents)', async () => {
+      const authenticate = vi.fn().mockResolvedValue(successfulAuth);
+      const categorize = vi.fn().mockResolvedValue(mockCategoryResult);
+      const handler = createCategorizeHandler({ categorize, authenticate });
+      const event = makeEvent({ body: JSON.stringify({ vendor: 'Store', description: 'Item', amount: 10_000_000 }) });
+      const response = await handler(event);
+      expect(response.statusCode).toBe(200);
+      expect(categorize).toHaveBeenCalled();
+    });
+
+    it('accepts zero amount (optional for categorization)', async () => {
+      const authenticate = vi.fn().mockResolvedValue(successfulAuth);
+      const categorize = vi.fn().mockResolvedValue(mockCategoryResult);
+      const handler = createCategorizeHandler({ categorize, authenticate });
+      const event = makeEvent({ body: JSON.stringify({ vendor: 'Store', description: 'Item', amount: 0 }) });
+      const response = await handler(event);
+      expect(response.statusCode).toBe(200);
+      expect(categorize).toHaveBeenCalled();
+    });
+
+    it('accepts missing amount (defaults to 0 for categorization)', async () => {
+      const authenticate = vi.fn().mockResolvedValue(successfulAuth);
+      const categorize = vi.fn().mockResolvedValue(mockCategoryResult);
+      const handler = createCategorizeHandler({ categorize, authenticate });
+      const event = makeEvent({ body: JSON.stringify({ vendor: 'Store', description: 'Item' }) });
+      const response = await handler(event);
+      expect(response.statusCode).toBe(200);
+      expect(categorize).toHaveBeenCalledWith({ vendor: 'Store', description: 'Item', amount: 0 });
+    });
+  });
+
   describe('defense-in-depth: extractAuthContext with API Gateway authorizer (#63)', () => {
     /**
      * Build event with API Gateway JWT authorizer context for defense-in-depth tests.
