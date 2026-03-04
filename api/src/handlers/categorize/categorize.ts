@@ -23,42 +23,67 @@ function jsonResponse(statusCode: number, body: unknown): APIGatewayProxyResultV
   };
 }
 
+/** Maximum allowed amount in cents ($100,000). Consistent with create handler (#45). */
+const MAX_AMOUNT_CENTS = 10_000_000;
+
+/**
+ * Result of parsing the categorize request body.
+ */
+type ParseResult =
+  | { success: true; input: CategorizationInput }
+  | { success: false; error: string };
+
 /**
  * Validate that the request body contains the required fields.
- * Returns the parsed input or null if invalid.
+ * Returns the parsed input or an error message.
  */
-function parseBody(body: string | null | undefined): CategorizationInput | null {
+function parseBody(body: string | null | undefined): ParseResult {
   if (!body) {
-    return null;
+    return { success: false, error: 'Missing required fields: vendor and description' };
   }
 
   try {
     const parsed: unknown = JSON.parse(body);
 
     if (typeof parsed !== 'object' || parsed === null) {
-      return null;
+      return { success: false, error: 'Missing required fields: vendor and description' };
     }
 
     const obj = parsed as Record<string, unknown>;
 
     if (typeof obj['vendor'] !== 'string' || obj['vendor'].length === 0) {
-      return null;
+      return { success: false, error: 'Missing required fields: vendor and description' };
     }
 
     if (typeof obj['description'] !== 'string' || obj['description'].length === 0) {
-      return null;
+      return { success: false, error: 'Missing required fields: vendor and description' };
     }
 
-    // Amount defaults to 0 if not provided (still valid)
-    const amount = typeof obj['amount'] === 'number' ? obj['amount'] : 0;
+    // Amount defaults to 0 if not provided (still valid for categorization)
+    let amount = 0;
+    if (obj['amount'] !== undefined && obj['amount'] !== null) {
+      if (typeof obj['amount'] !== 'number' || !Number.isFinite(obj['amount']) || !Number.isInteger(obj['amount'])) {
+        return { success: false, error: 'amount must be a non-negative integer (cents)' };
+      }
+      if ((obj['amount'] as number) < 0) {
+        return { success: false, error: 'amount must be a non-negative integer (cents)' };
+      }
+      if ((obj['amount'] as number) > MAX_AMOUNT_CENTS) {
+        return { success: false, error: `amount must not exceed ${MAX_AMOUNT_CENTS} cents ($100,000)` };
+      }
+      amount = obj['amount'] as number;
+    }
 
     return {
-      vendor: obj['vendor'] as string,
-      description: obj['description'] as string,
-      amount,
+      success: true,
+      input: {
+        vendor: obj['vendor'] as string,
+        description: obj['description'] as string,
+        amount,
+      },
     };
   } catch {
-    return null;
+    return { success: false, error: 'Missing required fields: vendor and description' };
   }
 }
 
@@ -85,16 +110,16 @@ export function createCategorizeHandler(
     }
 
     // Step 2: Validate input
-    const input = parseBody(event.body);
-    if (!input) {
+    const parsed = parseBody(event.body);
+    if (!parsed.success) {
       return jsonResponse(400, {
-        error: 'Missing required fields: vendor and description',
+        error: parsed.error,
         code: 'VALIDATION_ERROR',
       });
     }
 
     // Step 3: Categorize
-    const result = await deps.categorize(input);
+    const result = await deps.categorize(parsed.input);
 
     // Step 4: Return result (null is a valid response — graceful degradation)
     if (result === null) {

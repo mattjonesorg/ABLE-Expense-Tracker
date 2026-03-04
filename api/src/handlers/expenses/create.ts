@@ -43,6 +43,9 @@ const MAX_CATEGORY_LENGTH = 100;
 const MAX_PAID_BY_LENGTH = 100;
 const MAX_RECEIPT_KEY_LENGTH = 500;
 
+/** Maximum allowed amount in cents ($100,000). Prevents abuse via unrealistic values (#45). */
+const MAX_AMOUNT_CENTS = 10_000_000;
+
 /**
  * Build a JSON error response with the ApiError format.
  */
@@ -120,6 +123,10 @@ function validateBody(
 
   if ((body['amount'] as number) <= 0) {
     return { valid: false, error: 'amount must be a positive integer (cents)' };
+  }
+
+  if ((body['amount'] as number) > MAX_AMOUNT_CENTS) {
+    return { valid: false, error: `amount must not exceed ${MAX_AMOUNT_CENTS} cents ($100,000)` };
   }
 
   // Date must not be in the future
