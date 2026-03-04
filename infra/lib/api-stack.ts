@@ -58,6 +58,8 @@ interface RouteDefinition {
   readonly description: string;
   /** Path to the handler entry point TypeScript file */
   readonly entry: string;
+  /** DynamoDB access level: 'readwrite', 'read', or 'none'. Defaults to 'none'. */
+  readonly dynamoAccess?: 'readwrite' | 'read' | 'none';
   /** Whether this Lambda needs S3 read/write access */
   readonly needsS3Write?: boolean;
   /** Whether this Lambda needs the ANTHROPIC_API_KEY env var */
@@ -116,6 +118,7 @@ export class ApiStack extends cdk.Stack {
         path: '/expenses',
         description: 'Create a new expense',
         entry: path.join(HANDLERS_DIR, 'expenses/create.handler.ts'),
+        dynamoAccess: 'readwrite',
       },
       {
         id: 'ListExpenses',
@@ -123,6 +126,7 @@ export class ApiStack extends cdk.Stack {
         path: '/expenses',
         description: 'List all expenses',
         entry: path.join(HANDLERS_DIR, 'expenses/list.handler.ts'),
+        dynamoAccess: 'read',
       },
       {
         id: 'GetExpense',
@@ -130,6 +134,7 @@ export class ApiStack extends cdk.Stack {
         path: '/expenses/{id}',
         description: 'Get a single expense by ID',
         entry: path.join(HANDLERS_DIR, 'expenses/get.handler.ts'),
+        dynamoAccess: 'read',
       },
       {
         id: 'CategorizeExpense',
@@ -138,6 +143,7 @@ export class ApiStack extends cdk.Stack {
         description: 'AI-assisted expense categorization',
         entry: path.join(HANDLERS_DIR, 'categorize/categorize.handler.ts'),
         needsAnthropicKey: true,
+        dynamoAccess: 'none',
       },
       {
         id: 'ReimburseExpense',
@@ -145,6 +151,7 @@ export class ApiStack extends cdk.Stack {
         path: '/expenses/{id}/reimburse',
         description: 'Mark an expense as reimbursed',
         entry: path.join(HANDLERS_DIR, 'expenses/reimburse.handler.ts'),
+        dynamoAccess: 'readwrite',
       },
       {
         id: 'DashboardReimbursements',
@@ -152,6 +159,7 @@ export class ApiStack extends cdk.Stack {
         path: '/dashboard/reimbursements',
         description: 'Reimbursement summary dashboard',
         entry: path.join(HANDLERS_DIR, 'stub.handler.ts'),
+        dynamoAccess: 'read',
       },
       {
         id: 'RequestUploadUrl',
@@ -160,6 +168,7 @@ export class ApiStack extends cdk.Stack {
         description: 'Request a presigned URL for receipt upload',
         entry: path.join(HANDLERS_DIR, 'uploads/request-url.handler.ts'),
         needsS3Write: true,
+        dynamoAccess: 'none',
       },
     ] as const;
 
@@ -200,8 +209,13 @@ export class ApiStack extends cdk.Stack {
         },
       });
 
-      // Grant DynamoDB read/write to all Lambda functions
-      table.grantReadWriteData(fn);
+      // Grant DynamoDB access based on route's declared access level
+      if (route.dynamoAccess === 'readwrite') {
+        table.grantReadWriteData(fn);
+      } else if (route.dynamoAccess === 'read') {
+        table.grantReadData(fn);
+      }
+      // 'none' or undefined: no DynamoDB permissions granted
 
       // Grant S3 read/write to the upload handler
       if (route.needsS3Write === true) {
