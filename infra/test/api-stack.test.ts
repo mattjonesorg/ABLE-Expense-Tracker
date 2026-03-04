@@ -246,49 +246,141 @@ describe('ApiStack', () => {
     });
   });
 
-  describe('IAM Permissions', () => {
-    it('grants DynamoDB read/write access to Lambda functions', () => {
-      // CDK's table.grantReadWriteData() creates IAM policy statements
-      // with dynamodb:BatchGetItem, dynamodb:GetItem, dynamodb:Query, etc.
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Action: Match.arrayWith([
-                'dynamodb:BatchGetItem',
-                'dynamodb:Query',
-                'dynamodb:GetItem',
-                'dynamodb:Scan',
-                'dynamodb:ConditionCheckItem',
-                'dynamodb:BatchWriteItem',
-                'dynamodb:PutItem',
-                'dynamodb:UpdateItem',
-                'dynamodb:DeleteItem',
-                'dynamodb:DescribeTable',
-              ]),
-              Effect: 'Allow',
-            }),
-          ]),
-        },
+  describe('IAM Permissions — Least Privilege (#40)', () => {
+    /**
+     * Helper: find the IAM policy logical IDs attached to the role of a Lambda
+     * identified by its Description property.
+     */
+    function getPolicyStatementsForFunction(
+      tpl: Template,
+      description: string,
+    ): Record<string, unknown>[] {
+      // 1. Find the Lambda function by description
+      const functions = tpl.findResources('AWS::Lambda::Function', {
+        Properties: { Description: description },
       });
+      const fnLogicalIds = Object.keys(functions);
+      expect(fnLogicalIds.length).toBe(1);
+
+      // 2. The function's Role property is a Fn::GetAtt ref to the IAM Role
+      const roleRef = functions[fnLogicalIds[0]].Properties.Role;
+      // roleRef is { 'Fn::GetAtt': ['RoleLogicalId', 'Arn'] }
+      const roleLogicalId = roleRef['Fn::GetAtt'][0];
+
+      // 3. Find all IAM policies that reference this role
+      const allPolicies = tpl.findResources('AWS::IAM::Policy');
+      const statements: Record<string, unknown>[] = [];
+      for (const [_policyId, policyResource] of Object.entries(allPolicies)) {
+        const roles = (policyResource as Record<string, unknown> & { Properties: { Roles: Array<{ Ref: string }> } }).Properties.Roles;
+        const refsThisRole = roles?.some(
+          (r: { Ref: string }) => r.Ref === roleLogicalId,
+        );
+        if (refsThisRole) {
+          const stmts = (policyResource as Record<string, unknown> & { Properties: { PolicyDocument: { Statement: Record<string, unknown>[] } } }).Properties.PolicyDocument.Statement;
+          statements.push(...stmts);
+        }
+      }
+      return statements;
+    }
+
+    function statementsHaveDynamoWrite(
+      statements: Record<string, unknown>[],
+    ): boolean {
+      return statements.some((s) => {
+        const actions = s.Action;
+        if (!Array.isArray(actions)) return false;
+        return actions.includes('dynamodb:PutItem');
+      });
+    }
+
+    function statementsHaveDynamoRead(
+      statements: Record<string, unknown>[],
+    ): boolean {
+      return statements.some((s) => {
+        const actions = s.Action;
+        if (!Array.isArray(actions)) return false;
+        return actions.includes('dynamodb:GetItem');
+      });
+    }
+
+    function statementsHaveAnyDynamo(
+      statements: Record<string, unknown>[],
+    ): boolean {
+      return statements.some((s) => {
+        const actions = s.Action;
+        if (!Array.isArray(actions)) return false;
+        return actions.some(
+          (a: string) => typeof a === 'string' && a.startsWith('dynamodb:'),
+        );
+      });
+    }
+
+    // --- Read/Write functions ---
+
+    it('CreateExpense gets DynamoDB read/write access', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'Create a new expense');
+      expect(statementsHaveDynamoRead(stmts)).toBe(true);
+      expect(statementsHaveDynamoWrite(stmts)).toBe(true);
     });
 
-    it('grants S3 read/write access to the upload Lambda function', () => {
-      // CDK's bucket.grantReadWrite() creates IAM policy statements for s3
-      template.hasResourceProperties('AWS::IAM::Policy', {
-        PolicyDocument: {
-          Statement: Match.arrayWith([
-            Match.objectLike({
-              Action: Match.arrayWith([
-                's3:GetObject*',
-                's3:GetBucket*',
-                's3:List*',
-              ]),
-              Effect: 'Allow',
-            }),
-          ]),
-        },
+    it('ReimburseExpense gets DynamoDB read/write access', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'Mark an expense as reimbursed');
+      expect(statementsHaveDynamoRead(stmts)).toBe(true);
+      expect(statementsHaveDynamoWrite(stmts)).toBe(true);
+    });
+
+    // --- Read-only functions ---
+
+    it('ListExpenses gets DynamoDB read-only access (no write)', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'List all expenses');
+      expect(statementsHaveDynamoRead(stmts)).toBe(true);
+      expect(statementsHaveDynamoWrite(stmts)).toBe(false);
+    });
+
+    it('GetExpense gets DynamoDB read-only access (no write)', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'Get a single expense by ID');
+      expect(statementsHaveDynamoRead(stmts)).toBe(true);
+      expect(statementsHaveDynamoWrite(stmts)).toBe(false);
+    });
+
+    it('DashboardReimbursements gets DynamoDB read-only access (no write)', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'Reimbursement summary dashboard');
+      expect(statementsHaveDynamoRead(stmts)).toBe(true);
+      expect(statementsHaveDynamoWrite(stmts)).toBe(false);
+    });
+
+    // --- No DynamoDB access ---
+
+    it('CategorizeExpense gets NO DynamoDB access', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'AI-assisted expense categorization');
+      expect(statementsHaveAnyDynamo(stmts)).toBe(false);
+    });
+
+    it('RequestUploadUrl gets NO DynamoDB access', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'Request a presigned URL for receipt upload');
+      expect(statementsHaveAnyDynamo(stmts)).toBe(false);
+    });
+
+    // --- S3 access ---
+
+    it('RequestUploadUrl gets S3 read/write access', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'Request a presigned URL for receipt upload');
+      const hasS3 = stmts.some((s) => {
+        const actions = s.Action;
+        if (!Array.isArray(actions)) return false;
+        return actions.some((a: string) => typeof a === 'string' && a.startsWith('s3:'));
       });
+      expect(hasS3).toBe(true);
+    });
+
+    it('CreateExpense does NOT get S3 access', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'Create a new expense');
+      const hasS3 = stmts.some((s) => {
+        const actions = s.Action;
+        if (!Array.isArray(actions)) return false;
+        return actions.some((a: string) => typeof a === 'string' && a.startsWith('s3:'));
+      });
+      expect(hasS3).toBe(false);
     });
   });
 
