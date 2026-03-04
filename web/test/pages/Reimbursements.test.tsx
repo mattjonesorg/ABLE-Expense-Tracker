@@ -185,40 +185,36 @@ describe('Reimbursements Page', () => {
     });
   });
 
-  describe('recent expenses list', () => {
-    it('shows a recent expenses section', async () => {
+  describe('unreimbursed expenses list', () => {
+    it('shows an unreimbursed expenses section', async () => {
       renderReimbursements();
       await waitFor(() => {
         expect(
-          screen.getByRole('heading', { name: /recent expenses/i }),
+          screen.getByRole('heading', { name: /unreimbursed expenses/i }),
         ).toBeInTheDocument();
       });
     });
 
-    it('displays up to 5 most recent expenses', async () => {
+    it('displays only unreimbursed expenses (excludes reimbursed ones)', async () => {
       renderReimbursements();
       await waitFor(() => {
         expect(screen.getByText('City Transit Authority')).toBeInTheDocument();
       });
       expect(screen.getByText('Dr. Smith Family Practice')).toBeInTheDocument();
       expect(screen.getByText('Whole Foods Market')).toBeInTheDocument();
-      expect(screen.getByText('Amazon')).toBeInTheDocument();
-      expect(screen.getByText('Target')).toBeInTheDocument();
+      // These are reimbursed and should NOT appear in the table
+      expect(screen.queryByText('Amazon')).not.toBeInTheDocument();
+      expect(screen.queryByText('Target')).not.toBeInTheDocument();
     });
 
-    it('shows reimbursement status badges on recent expenses', async () => {
+    it('does not show a Reimbursed column', async () => {
       renderReimbursements();
       await waitFor(() => {
         expect(screen.getByRole('table')).toBeInTheDocument();
       });
 
       const table = screen.getByRole('table');
-      const rows = within(table).getAllByRole('row');
-      // Row 0 is header, rows 1+ are data
-      // Expenses sorted by date desc: Matt bus (unreimbursed), Matt dr (unreimbursed),
-      // Sarah groceries (unreimbursed), Matt amazon (reimbursed), Sarah target (reimbursed)
-      expect(within(rows[1]).getByText('No')).toBeInTheDocument();
-      expect(within(rows[4]).getByText('Yes')).toBeInTheDocument();
+      expect(within(table).queryByText('Reimbursed')).not.toBeInTheDocument();
     });
   });
 
