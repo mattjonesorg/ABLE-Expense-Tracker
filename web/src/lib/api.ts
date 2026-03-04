@@ -46,74 +46,99 @@ export interface ListExpensesFilters {
  * Consumers should redirect to the login page when catching this error.
  */
 export class ApiAuthenticationError extends Error {
-  constructor(message = 'Authentication required. Please log in.') {
+  constructor(message = 'Your session has expired. Please log in again.') {
     super(message);
     this.name = 'ApiAuthenticationError';
   }
 }
 
-// --- Internal Helpers ---
+/**
+ * Thrown when the server returns a 5xx error.
+ * Shows a user-friendly message; technical details are logged to console.
+ */
+export class ApiServerError extends Error {
+  constructor(message = 'Something went wrong on our end. Please try again.') {
+    super(message);
+    this.name = 'ApiServerError';
+  }
+}
 
 /**
- * Get the authorization headers for API requests.
- * Throws ApiAuthenticationError if no token is available.
+ * Thrown when a network error prevents the request from completing.
+ * Shows a user-friendly message; technical details are logged to console.
  */
+export class ApiNetworkError extends Error {
+  constructor(
+    message = 'Unable to reach the server. Check your internet connection.',
+  ) {
+    super(message);
+    this.name = 'ApiNetworkError';
+  }
+}
+
+/**
+ * Thrown when the response body cannot be parsed as JSON.
+ * Shows a user-friendly message; technical details are logged to console.
+ */
+export class ApiResponseParseError extends Error {
+  constructor(
+    message = 'We received an unexpected response. Please try again.',
+  ) {
+    super(message);
+    this.name = 'ApiResponseParseError';
+  }
+}
+
+// --- Internal Helpers ---
+
 function getAuthHeaders(): Record<string, string> {
   const token = getIdToken();
   if (!token) {
     throw new ApiAuthenticationError();
   }
-  return {
-    'Authorization': `Bearer ${token}`,
-  };
+  return { 'Authorization': `Bearer ${token}` };
 }
 
-/**
- * Parse an API error response and throw an appropriate error.
- * Handles JSON error bodies with `{ error, code }` format and
- * falls back to status text for non-JSON responses.
- */
 async function handleErrorResponse(response: Response): Promise<never> {
   if (response.status === 401) {
     throw new ApiAuthenticationError();
   }
 
-  // Try to parse JSON error body
   const contentType = response.headers.get('content-type') ?? '';
+  let errorMessage: string | null = null;
+
   if (contentType.includes('application/json')) {
     const body: unknown = await response.json();
-    if (
-      typeof body === 'object' &&
-      body !== null &&
-      'error' in body &&
-      typeof (body as Record<string, unknown>)['error'] === 'string'
-    ) {
-      throw new Error((body as Record<string, unknown>)['error'] as string);
+    if (typeof body === 'object' && body !== null && 'error' in body && typeof (body as Record<string, unknown>)['error'] === 'string') {
+      errorMessage = (body as Record<string, unknown>)['error'] as string;
     }
   }
 
-  // Fallback for non-JSON responses
+  if (response.status >= 500) {
+    // eslint-disable-next-line no-console
+    console.error(`API server error (${response.status}):`, errorMessage ?? response.statusText);
+    throw new ApiServerError();
+  }
+
+  if (errorMessage) {
+    throw new Error(errorMessage);
+  }
+
   throw new Error(`API request failed with status ${response.status}`);
 }
 
-/**
- * Make an authenticated API request.
- * Automatically adds the Authorization header and handles errors.
- */
-async function apiRequest(
-  path: string,
-  options: RequestInit = {},
-): Promise<Response> {
+async function apiRequest(path: string, options: RequestInit = {}): Promise<Response> {
   const authHeaders = getAuthHeaders();
-  const headers: Record<string, string> = {
-    ...authHeaders,
-    ...(options.headers as Record<string, string> | undefined),
-  };
+  const headers: Record<string, string> = { ...authHeaders, ...(options.headers as Record<string, string> | undefined) };
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch (err: unknown) {
+    // eslint-disable-next-line no-console
+    console.error('API network error:', err);
+    throw new ApiNetworkError();
+  }
 
   if (!response.ok) {
     await handleErrorResponse(response);
@@ -122,134 +147,56 @@ async function apiRequest(
   return response;
 }
 
+async function safeParseJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json();
+  } catch (err: unknown) {
+    // eslint-disable-next-line no-console
+    console.error('API response parse error:', err);
+    throw new ApiResponseParseError();
+  }
+}
+
 // --- Public API Functions ---
 
-/**
- * Fetch the list of expenses, optionally filtered by category and date range.
- * Calls GET /expenses with query parameters.
- */
-export async function listExpenses(
-  filters?: ListExpensesFilters,
-): Promise<Expense[]> {
+export async function listExpenses(filters?: ListExpensesFilters): Promise<Expense[]> {
   const params = new URLSearchParams();
-
-  if (filters?.category) {
-    params.set('category', filters.category);
-  }
-  if (filters?.startDate) {
-    params.set('startDate', filters.startDate);
-  }
-  if (filters?.endDate) {
-    params.set('endDate', filters.endDate);
-  }
+  if (filters?.category) { params.set('category', filters.category); }
+  if (filters?.startDate) { params.set('startDate', filters.startDate); }
+  if (filters?.endDate) { params.set('endDate', filters.endDate); }
 
   const queryString = params.toString();
   const path = queryString ? `/expenses?${queryString}` : '/expenses';
 
   const response = await apiRequest(path, { method: 'GET' });
-  const data: unknown = await response.json();
+  const data: unknown = await safeParseJson(response);
 
-  // The API returns { expenses: Expense[] }
-  if (
-    typeof data === 'object' &&
-    data !== null &&
-    'expenses' in data &&
-    Array.isArray((data as Record<string, unknown>)['expenses'])
-  ) {
+  if (typeof data === 'object' && data !== null && 'expenses' in data && Array.isArray((data as Record<string, unknown>)['expenses'])) {
     return (data as { expenses: Expense[] }).expenses;
   }
-
-  // Fallback: if the response is an array directly
-  if (Array.isArray(data)) {
-    return data as Expense[];
-  }
-
+  if (Array.isArray(data)) { return data as Expense[]; }
   return [];
 }
 
-/**
- * Fetch a single expense by ID.
- * Calls GET /expenses/{id}.
- */
 export async function getExpense(id: string): Promise<Expense> {
-  const response = await apiRequest(`/expenses/${encodeURIComponent(id)}`, {
-    method: 'GET',
-  });
-  return (await response.json()) as Expense;
+  const response = await apiRequest(`/expenses/${encodeURIComponent(id)}`, { method: 'GET' });
+  return (await safeParseJson(response)) as Expense;
 }
 
-/**
- * Create a new expense.
- * Calls POST /expenses with a JSON body.
- * Note: receiptFile is not sent in this request; receipt upload is handled separately.
- */
 export async function createExpense(data: ExpenseFormInput): Promise<Expense> {
-  const body = {
-    vendor: data.vendor,
-    description: data.description,
-    amount: data.amount,
-    date: data.date,
-    paidBy: data.paidBy,
-    category: data.category,
-    categoryConfidence: data.categoryConfidence,
-  };
-
-  const response = await apiRequest('/expenses', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  return (await response.json()) as Expense;
+  const body = { vendor: data.vendor, description: data.description, amount: data.amount, date: data.date, paidBy: data.paidBy, category: data.category, categoryConfidence: data.categoryConfidence };
+  const response = await apiRequest('/expenses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  return (await safeParseJson(response)) as Expense;
 }
 
-/**
- * Categorize an expense using AI.
- * Calls POST /categorize with vendor and description.
- * Returns null when the API returns a graceful degradation response.
- */
-export async function categorizeExpense(
-  data: CategorizeInput,
-): Promise<CategoryResult | null> {
-  const response = await apiRequest('/categorize', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      vendor: data.vendor,
-      description: data.description,
-    }),
-  });
-
-  const result: unknown = await response.json();
-
-  // Handle graceful degradation: { result: null }
-  if (
-    typeof result === 'object' &&
-    result !== null &&
-    'result' in result &&
-    (result as Record<string, unknown>)['result'] === null
-  ) {
-    return null;
-  }
-
+export async function categorizeExpense(data: CategorizeInput): Promise<CategoryResult | null> {
+  const response = await apiRequest('/categorize', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vendor: data.vendor, description: data.description }) });
+  const result: unknown = await safeParseJson(response);
+  if (typeof result === 'object' && result !== null && 'result' in result && (result as Record<string, unknown>)['result'] === null) { return null; }
   return result as CategoryResult;
 }
 
-/**
- * Mark an expense as reimbursed.
- * Calls POST /expenses/{id}/reimburse.
- */
 export async function reimburseExpense(id: string): Promise<Expense> {
-  const response = await apiRequest(
-    `/expenses/${encodeURIComponent(id)}/reimburse`,
-    {
-      method: 'POST',
-    },
-  );
-
-  return (await response.json()) as Expense;
+  const response = await apiRequest(`/expenses/${encodeURIComponent(id)}/reimburse`, { method: 'POST' });
+  return (await safeParseJson(response)) as Expense;
 }

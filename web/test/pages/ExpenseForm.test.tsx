@@ -461,3 +461,143 @@ describe('ExpenseForm', () => {
     });
   });
 });
+
+describe('Character limits (#80)', () => {
+  /** Backend-matching field limits */
+  const LIMITS = { vendor: 200, description: 1000, paidBy: 100 };
+
+  describe('maxLength attributes', () => {
+    it('vendor input has maxLength of 200', () => {
+      renderExpenseForm();
+      expect(screen.getByLabelText(/vendor/i)).toHaveAttribute('maxLength', '200');
+    });
+
+    it('description textarea has maxLength of 1000', () => {
+      renderExpenseForm();
+      expect(screen.getByLabelText(/description/i)).toHaveAttribute('maxLength', '1000');
+    });
+
+    it('paid by input has maxLength of 100', () => {
+      renderExpenseForm();
+      expect(screen.getByLabelText(/paid by/i)).toHaveAttribute('maxLength', '100');
+    });
+  });
+
+  describe('Character counters', () => {
+    it('shows character counter for vendor field', () => {
+      renderExpenseForm();
+      expect(screen.getByText('0/200')).toBeInTheDocument();
+    });
+
+    it('updates vendor counter as user types', async () => {
+      const user = userEvent.setup();
+      renderExpenseForm();
+
+      await user.type(screen.getByLabelText(/vendor/i), 'Hello');
+
+      expect(screen.getByText('5/200')).toBeInTheDocument();
+    });
+
+    it('shows character counter for description field', () => {
+      renderExpenseForm();
+      expect(screen.getByText('0/1000')).toBeInTheDocument();
+    });
+
+    it('updates description counter as user types', async () => {
+      const user = userEvent.setup();
+      renderExpenseForm();
+
+      await user.type(screen.getByLabelText(/description/i), 'Test description');
+
+      expect(screen.getByText('16/1000')).toBeInTheDocument();
+    });
+
+    it('shows character counter for paid by field', () => {
+      renderExpenseForm();
+      expect(screen.getByText('0/100')).toBeInTheDocument();
+    });
+
+    it('updates paid by counter as user types', async () => {
+      const user = userEvent.setup();
+      renderExpenseForm();
+
+      await user.type(screen.getByLabelText(/paid by/i), 'John');
+
+      expect(screen.getByText('4/100')).toBeInTheDocument();
+    });
+  });
+
+  describe('Form validation at limits', () => {
+    it('shows validation error for vendor exceeding 200 characters', async () => {
+      const user = userEvent.setup();
+      renderExpenseForm();
+
+      // Fill all required fields
+      await fillRequiredFields(user);
+
+      // Programmatically set vendor beyond limit (maxLength prevents typing)
+      const vendorInput = screen.getByLabelText(/vendor/i);
+      // Use fireEvent to bypass maxLength
+      const longVendor = 'A'.repeat(201);
+      Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set?.call(vendorInput, longVendor);
+      vendorInput.dispatchEvent(new Event('input', { bubbles: true }));
+      vendorInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const submitButton = screen.getByRole('button', { name: /create expense/i });
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/vendor must be 200 characters or fewer/i)).toBeInTheDocument();
+      });
+    });
+
+    it('shows validation error for description exceeding 1000 characters', async () => {
+      const user = userEvent.setup();
+      renderExpenseForm();
+
+      await fillRequiredFields(user);
+
+      const descInput = screen.getByLabelText(/description/i);
+      const longDesc = 'A'.repeat(1001);
+      Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value',
+      )?.set?.call(descInput, longDesc);
+      descInput.dispatchEvent(new Event('input', { bubbles: true }));
+      descInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const submitButton = screen.getByRole('button', { name: /create expense/i });
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/description must be 1000 characters or fewer/i)).toBeInTheDocument();
+      });
+    });
+
+    it('shows validation error for paid by exceeding 100 characters', async () => {
+      const user = userEvent.setup();
+      renderExpenseForm();
+
+      await fillRequiredFields(user);
+
+      const paidByInput = screen.getByLabelText(/paid by/i);
+      const longPaidBy = 'A'.repeat(101);
+      Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set?.call(paidByInput, longPaidBy);
+      paidByInput.dispatchEvent(new Event('input', { bubbles: true }));
+      paidByInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+      const submitButton = screen.getByRole('button', { name: /create expense/i });
+      await user.click(submitButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/paid by must be 100 characters or fewer/i)).toBeInTheDocument();
+      });
+    });
+  });
+});
