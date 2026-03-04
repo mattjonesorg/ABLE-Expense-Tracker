@@ -261,6 +261,20 @@ async function main() {
       console.log('  OK');
 
       // -------------------------------------------------------
+      // 11 — Reimbursements page
+      // -------------------------------------------------------
+      console.log('Capturing 11-reimbursements...');
+      const reimbursementsNav = page.locator('a[href="/reimbursements"]').first();
+      await reimbursementsNav.click();
+      await page.waitForURL('**/reimbursements', { timeout: 10000 });
+      await page.waitForTimeout(2000); // Wait for API call
+      await page.screenshot({
+        path: path.join(SCREENSHOTS_DIR, '11-reimbursements.png'),
+        fullPage: false,
+      });
+      console.log('  OK');
+
+      // -------------------------------------------------------
       // 10 — Logout button
       // -------------------------------------------------------
       console.log('Capturing 10-logout...');
