@@ -1,0 +1,59 @@
+name: Smoke Test
+
+on:
+  # Run after infrastructure or frontend deploys
+  workflow_run:
+    workflows: ["Deploy Infrastructure", "Deploy Frontend"]
+    types: [completed]
+    branches: [main]
+  # Allow manual trigger
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    environment: dev
+    # Only run if the triggering workflow succeeded (or manual dispatch)
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Get stack outputs
+        id: stack
+        run: |
+          API_URL=$(aws cloudformation describe-stacks --stack-name AbleTracker-Api \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name AbleTracker-Auth \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
+          CLIENT_ID=$(aws cloudformation describe-stacks --stack-name AbleTracker-Auth \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
+          echo "api_url=$API_URL" >> "$GITHUB_OUTPUT"
+          echo "user_pool_id=$USER_POOL_ID" >> "$GITHUB_OUTPUT"
+          echo "client_id=$CLIENT_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Run smoke tests
+        run: node scripts/smoke-test.mjs
+        env:
+          API_URL: ${{ steps.stack.outputs.api_url }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          COGNITO_USER_POOL_ID: ${{ steps.stack.outputs.user_pool_id }}
+          COGNITO_CLIENT_ID: ${{ steps.stack.outputs.client_id }}
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}

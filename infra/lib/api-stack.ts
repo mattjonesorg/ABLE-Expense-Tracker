@@ -144,7 +144,7 @@ export class ApiStack extends cdk.Stack {
         method: HttpMethod.PUT,
         path: '/expenses/{id}/reimburse',
         description: 'Mark an expense as reimbursed',
-        entry: path.join(HANDLERS_DIR, 'stub.handler.ts'),
+        entry: path.join(HANDLERS_DIR, 'expenses/reimburse.handler.ts'),
       },
       {
         id: 'DashboardReimbursements',
