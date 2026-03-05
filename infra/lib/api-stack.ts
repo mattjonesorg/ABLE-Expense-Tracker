@@ -8,6 +8,7 @@ import {
   HttpApi,
   HttpMethod,
   CorsHttpMethod,
+  CfnStage,
 } from 'aws-cdk-lib/aws-apigatewayv2';
 import { HttpUserPoolAuthorizer } from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
 import { HttpLambdaIntegration } from 'aws-cdk-lib/aws-apigatewayv2-integrations';
@@ -233,6 +234,30 @@ export class ApiStack extends cdk.Stack {
         methods: [route.method],
         integration,
       });
+    }
+
+    // --- API Gateway Throttling (#47) ---
+    // Access the underlying CfnStage of the default stage to configure throttling.
+    // The HttpApi L2 construct does not expose throttling settings directly.
+    const defaultStage = this.httpApi.defaultStage?.node
+      .defaultChild as CfnStage;
+    if (defaultStage) {
+      // Default route throttling: 100 req/s rate, 200 burst
+      defaultStage.defaultRouteSettings = {
+        throttlingRateLimit: 100,
+        throttlingBurstLimit: 200,
+      };
+      // Stricter throttling for the expensive AI categorization endpoint.
+      // Use addPropertyOverride because CfnStage.routeSettings does not
+      // auto-capitalise nested property names into CloudFormation PascalCase.
+      defaultStage.addPropertyOverride(
+        'RouteSettings.POST /expenses/categorize.ThrottlingRateLimit',
+        10,
+      );
+      defaultStage.addPropertyOverride(
+        'RouteSettings.POST /expenses/categorize.ThrottlingBurstLimit',
+        20,
+      );
     }
 
     // --- Stack Outputs ---

@@ -399,6 +399,62 @@ describe('ApiStack', () => {
   });
 });
 
+describe('ApiStack — API Gateway Throttling (#47)', () => {
+  let template: Template;
+
+  beforeAll(() => {
+    const app = new cdk.App();
+    const deps = createTestDependencies(app, 'Throttle');
+
+    const props: ApiStackProps = {
+      ...deps,
+    };
+
+    const stack = new ApiStack(app, 'TestApiStackThrottle', props);
+    template = Template.fromStack(stack);
+  });
+
+  describe('Default route throttling', () => {
+    it('configures default throttling rate limit of 100 requests/second', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+        DefaultRouteSettings: Match.objectLike({
+          ThrottlingRateLimit: 100,
+        }),
+      });
+    });
+
+    it('configures default throttling burst limit of 200', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+        DefaultRouteSettings: Match.objectLike({
+          ThrottlingBurstLimit: 200,
+        }),
+      });
+    });
+  });
+
+  describe('Categorize endpoint throttling', () => {
+    it('configures stricter rate limit of 10 requests/second for POST /expenses/categorize', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+        RouteSettings: Match.objectLike({
+          'POST /expenses/categorize': Match.objectLike({
+            ThrottlingRateLimit: 10,
+          }),
+        }),
+      });
+    });
+
+    it('configures stricter burst limit of 20 for POST /expenses/categorize', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+        RouteSettings: Match.objectLike({
+          'POST /expenses/categorize': Match.objectLike({
+            ThrottlingBurstLimit: 20,
+          }),
+        }),
+      });
+    });
+  });
+});
+
 describe('ApiStack CORS — custom origins', () => {
   let template: Template;
 
