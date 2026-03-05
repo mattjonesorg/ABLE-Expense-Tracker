@@ -197,8 +197,15 @@ export async function categorizeExpense(data: CategorizeInput): Promise<Category
   return result as CategoryResult;
 }
 
-export async function reimburseExpense(id: string): Promise<Expense> {
-  const response = await apiRequest(`/expenses/${encodeURIComponent(id)}/reimburse`, { method: 'POST' });
+export async function reimburseExpense(id: string, reimbursedBy: string): Promise<Expense> {
+  const response = await apiRequest(
+    `/expenses/${encodeURIComponent(id)}/reimburse`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reimbursedBy }),
+    },
+  );
   return (await safeParseJson(response)) as Expense;
 }
 

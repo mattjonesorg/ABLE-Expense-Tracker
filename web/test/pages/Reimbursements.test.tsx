@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MantineProvider } from '@mantine/core';
 import { MemoryRouter } from 'react-router-dom';
 import { Reimbursements } from '../../src/pages/Reimbursements';
@@ -100,9 +101,19 @@ const MOCK_EXPENSES: Expense[] = [
 
 // Mock the API module
 const mockListExpenses = vi.fn<[], Promise<Expense[]>>();
+const mockReimburseExpense = vi.fn<[string, string], Promise<Expense>>();
 vi.mock('../../src/lib/api', () => ({
   listExpenses: (...args: unknown[]) => mockListExpenses(...(args as [])),
+  reimburseExpense: (...args: unknown[]) => mockReimburseExpense(...(args as [string, string])),
 }));
+
+function buildReimbursedExpense(expense: Expense): Expense {
+  return {
+    ...expense,
+    reimbursed: true,
+    reimbursedAt: '2026-03-01T12:00:00Z',
+  };
+}
 
 function renderReimbursements() {
   return render(
@@ -279,6 +290,217 @@ describe('Reimbursements Page', () => {
       await waitFor(() => {
         expect(screen.getByText(/all caught up/i)).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Mark as Reimbursed action', () => {
+    let confirmSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      confirmSpy = vi.spyOn(window, 'confirm');
+      confirmSpy.mockReturnValue(true);
+      mockReimburseExpense.mockResolvedValue(
+        buildReimbursedExpense(MOCK_EXPENSES[0]),
+      );
+    });
+
+    it('renders Mark Reimbursed button for each unreimbursed expense', async () => {
+      renderReimbursements();
+
+      await waitFor(() => {
+        // 3 unreimbursed expenses in MOCK_EXPENSES (indices 0, 1, 2)
+        const buttons = screen.getAllByRole('button', {
+          name: /mark .+ expense as reimbursed/i,
+        });
+        expect(buttons).toHaveLength(3);
+      });
+    });
+
+    it('does not render Mark Reimbursed button for reimbursed expenses', async () => {
+      renderReimbursements();
+
+      await waitFor(() => {
+        expect(screen.getByText('City Transit Authority')).toBeInTheDocument();
+      });
+
+      // Amazon and Target are reimbursed - no buttons for them
+      expect(
+        screen.queryByRole('button', {
+          name: /mark Amazon expense as reimbursed/i,
+        }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', {
+          name: /mark Target expense as reimbursed/i,
+        }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('button has accessible aria-label including the vendor name', async () => {
+      renderReimbursements();
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', {
+            name: 'Mark City Transit Authority expense as reimbursed',
+          }),
+        ).toBeInTheDocument();
+      });
+      expect(
+        screen.getByRole('button', {
+          name: 'Mark Dr. Smith Family Practice expense as reimbursed',
+        }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', {
+          name: 'Mark Whole Foods Market expense as reimbursed',
+        }),
+      ).toBeInTheDocument();
+    });
+
+    it('calls reimburseExpense with correct ID and paidBy when user confirms', async () => {
+      const user = userEvent.setup();
+      renderReimbursements();
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', {
+            name: 'Mark City Transit Authority expense as reimbursed',
+          }),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(
+        screen.getByRole('button', {
+          name: 'Mark City Transit Authority expense as reimbursed',
+        }),
+      );
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(mockReimburseExpense).toHaveBeenCalledWith(
+        '01REIMB_MATT_1',
+        'Matt',
+      );
+    });
+
+    it('does NOT call reimburseExpense when user cancels confirmation', async () => {
+      confirmSpy.mockReturnValue(false);
+      const user = userEvent.setup();
+      renderReimbursements();
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', {
+            name: 'Mark City Transit Authority expense as reimbursed',
+          }),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(
+        screen.getByRole('button', {
+          name: 'Mark City Transit Authority expense as reimbursed',
+        }),
+      );
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(mockReimburseExpense).not.toHaveBeenCalled();
+    });
+
+    it('shows loading state on clicked button while request is in flight', async () => {
+      // Make reimburseExpense hang so we can observe loading state
+      mockReimburseExpense.mockReturnValue(new Promise(() => {}));
+      const user = userEvent.setup();
+      renderReimbursements();
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', {
+            name: 'Mark City Transit Authority expense as reimbursed',
+          }),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(
+        screen.getByRole('button', {
+          name: 'Mark City Transit Authority expense as reimbursed',
+        }),
+      );
+
+      // The button should show a loading indicator
+      await waitFor(() => {
+        const button = screen.getByRole('button', {
+          name: 'Mark City Transit Authority expense as reimbursed',
+        });
+        expect(button).toHaveAttribute('data-loading', 'true');
+      });
+    });
+
+    it('refetches expenses after successful reimbursement', async () => {
+      const user = userEvent.setup();
+      renderReimbursements();
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', {
+            name: 'Mark City Transit Authority expense as reimbursed',
+          }),
+        ).toBeInTheDocument();
+      });
+
+      // listExpenses called once on mount
+      expect(mockListExpenses).toHaveBeenCalledTimes(1);
+
+      await user.click(
+        screen.getByRole('button', {
+          name: 'Mark City Transit Authority expense as reimbursed',
+        }),
+      );
+
+      // After successful reimburse, listExpenses should be called again
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    it('shows error message when reimbursement fails', async () => {
+      mockReimburseExpense.mockRejectedValue(
+        new Error('Something went wrong on our end. Please try again.'),
+      );
+      const user = userEvent.setup();
+      renderReimbursements();
+
+      await waitFor(() => {
+        expect(
+          screen.getByRole('button', {
+            name: 'Mark City Transit Authority expense as reimbursed',
+          }),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(
+        screen.getByRole('button', {
+          name: 'Mark City Transit Authority expense as reimbursed',
+        }),
+      );
+
+      await waitFor(() => {
+        const alert = screen.getByRole('alert');
+        expect(alert).toBeInTheDocument();
+        expect(alert.textContent).toContain(
+          'Something went wrong on our end. Please try again.',
+        );
+      });
+    });
+
+    it('renders Actions column header in the unreimbursed table', async () => {
+      renderReimbursements();
+
+      await waitFor(() => {
+        expect(screen.getByRole('table')).toBeInTheDocument();
+      });
+
+      const table = screen.getByRole('table');
+      expect(within(table).getByText('Actions')).toBeInTheDocument();
     });
   });
 });
