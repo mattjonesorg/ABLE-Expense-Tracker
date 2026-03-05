@@ -268,6 +268,48 @@ describe('ExpenseRepository', () => {
       const result = await repo.listExpenses('acct-123');
       expect(result).toEqual([]);
     });
+
+    it('adds FilterExpression for reimbursed=true when filter is provided', async () => {
+      ddbMock.on(QueryCommand).resolves({ Items: [] });
+
+      await repo.listExpenses('acct-123', { reimbursed: true });
+
+      const calls = ddbMock.commandCalls(QueryCommand);
+      expect(calls).toHaveLength(1);
+
+      const queryInput = calls[0].args[0].input;
+      expect(queryInput.FilterExpression).toBe('reimbursed = :reimbursed');
+      expect(queryInput.ExpressionAttributeValues).toMatchObject({
+        ':pk': 'ACCOUNT#acct-123',
+        ':skPrefix': 'EXP#',
+        ':reimbursed': true,
+      });
+    });
+
+    it('adds FilterExpression for reimbursed=false when filter is provided', async () => {
+      ddbMock.on(QueryCommand).resolves({ Items: [] });
+
+      await repo.listExpenses('acct-123', { reimbursed: false });
+
+      const calls = ddbMock.commandCalls(QueryCommand);
+      expect(calls).toHaveLength(1);
+
+      const queryInput = calls[0].args[0].input;
+      expect(queryInput.FilterExpression).toBe('reimbursed = :reimbursed');
+      expect(queryInput.ExpressionAttributeValues).toMatchObject({
+        ':reimbursed': false,
+      });
+    });
+
+    it('does not add FilterExpression when no filters are provided', async () => {
+      ddbMock.on(QueryCommand).resolves({ Items: [] });
+
+      await repo.listExpenses('acct-123');
+
+      const calls = ddbMock.commandCalls(QueryCommand);
+      const queryInput = calls[0].args[0].input;
+      expect(queryInput.FilterExpression).toBeUndefined();
+    });
   });
 
   describe('listExpensesByCategory', () => {

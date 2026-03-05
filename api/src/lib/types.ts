@@ -79,6 +79,10 @@ export interface ReimbursementSummary {
   expenseCount: number;
 }
 
+export interface ListExpensesFilters {
+  reimbursed?: boolean;
+}
+
 export interface ApiError {
   error: string;
   code: string;
