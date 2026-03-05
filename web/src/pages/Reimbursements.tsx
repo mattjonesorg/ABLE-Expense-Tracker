@@ -68,8 +68,7 @@ export function Reimbursements() {
   const totalUnreimbursed = reimbursements.reduce((sum, r) => sum + r.totalOwed, 0);
   const unreimbursedExpenses = [...expenses]
     .filter((e) => !e.reimbursed)
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 5);
+    .sort((a, b) => b.date.localeCompare(a.date));
   const allReimbursed = expenses.length > 0 && reimbursements.length === 0;
 
   return (
