@@ -158,11 +158,29 @@ describe('API Client (real fetch calls)', () => {
   });
 
   describe('reimburseExpense', () => {
-    it('sends POST to /expenses/{id}/reimburse', async () => {
+    it('sends PUT to /expenses/{id}/reimburse', async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify(buildMockExpense({ reimbursed: true, reimbursedAt: '2026-02-26T12:00:00Z' })), { status: 200, headers: { 'content-type': 'application/json' } }));
-      const result = await reimburseExpense('exp_123');
-      expect((fetchSpy.mock.calls[0] as [string])[0]).toBe('https://api.test.example.com/expenses/exp_123/reimburse');
+      await reimburseExpense('exp_123', 'Matt');
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('https://api.test.example.com/expenses/exp_123/reimburse');
+      expect(init.method).toBe('PUT');
+    });
+
+    it('sends reimbursedBy in request body with Content-Type application/json', async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify(buildMockExpense({ reimbursed: true, reimbursedAt: '2026-02-26T12:00:00Z' })), { status: 200, headers: { 'content-type': 'application/json' } }));
+      await reimburseExpense('exp_123', 'Sarah');
+      const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(init.headers).toHaveProperty('Content-Type', 'application/json');
+      const body = JSON.parse(init.body as string) as Record<string, unknown>;
+      expect(body['reimbursedBy']).toBe('Sarah');
+    });
+
+    it('returns the updated expense', async () => {
+      const updatedExpense = buildMockExpense({ reimbursed: true, reimbursedAt: '2026-02-26T12:00:00Z' });
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify(updatedExpense), { status: 200, headers: { 'content-type': 'application/json' } }));
+      const result = await reimburseExpense('exp_123', 'Matt');
       expect(result.reimbursed).toBe(true);
+      expect(result.reimbursedAt).toBe('2026-02-26T12:00:00Z');
     });
   });
 
