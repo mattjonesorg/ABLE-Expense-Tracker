@@ -17,6 +17,13 @@ const ALLOWED_CONTENT_TYPES: Record<string, string> = {
 const PRESIGNED_URL_TTL = 900;
 
 /**
+ * Maximum upload file size in bytes (10 MB).
+ * Enforced at both the handler level (rejects before presigning)
+ * and the S3 level (ContentLength in the presigned URL).
+ */
+export const MAX_UPLOAD_SIZE = 10 * 1024 * 1024; // 10 MB = 10485760 bytes
+
+/**
  * Dependencies injected into the upload URL handler.
  * This enables easy testing without real AWS infrastructure.
  */
@@ -28,6 +35,7 @@ export interface UploadHandlerDeps {
     bucketName: string,
     key: string,
     contentType: string,
+    contentLength: number,
     expiresIn: number,
   ) => Promise<string>;
   /** The S3 bucket name for receipt storage. */
@@ -65,6 +73,7 @@ function successResponse(data: Record<string, unknown>): APIGatewayProxyResultV2
  */
 interface UploadRequestBody {
   contentType?: string;
+  fileSize?: unknown;
 }
 
 /**
@@ -73,8 +82,9 @@ interface UploadRequestBody {
  * The handler:
  * 1. Authenticates the request via injected auth middleware
  * 2. Validates the requested content type is an allowed image format
- * 3. Generates a scoped S3 key: receipts/<accountId>/<ulid>.<ext>
- * 4. Returns a presigned PUT URL with a 15-minute TTL
+ * 3. Validates the file size is a positive integer not exceeding MAX_UPLOAD_SIZE (10 MB)
+ * 4. Generates a scoped S3 key: receipts/<accountId>/<ulid>.<ext>
+ * 5. Returns a presigned PUT URL with ContentLength constraint and a 15-minute TTL
  *
  * @param deps - Injectable dependencies for testability
  * @returns API Gateway v2 handler function
@@ -121,19 +131,48 @@ export function createUploadUrlHandler(
       );
     }
 
-    // Step 5: Generate scoped S3 key
+    // Step 5: Validate fileSize is present
+    const { fileSize } = requestBody;
+    if (fileSize === undefined || fileSize === null) {
+      return errorResponse(
+        400,
+        'Missing required field: fileSize',
+        'MISSING_FILE_SIZE',
+      );
+    }
+
+    // Step 6: Validate fileSize is a positive integer
+    if (typeof fileSize !== 'number' || !Number.isInteger(fileSize) || fileSize <= 0) {
+      return errorResponse(
+        400,
+        'fileSize must be a positive integer (bytes)',
+        'INVALID_FILE_SIZE',
+      );
+    }
+
+    // Step 7: Validate fileSize does not exceed the maximum
+    if (fileSize > MAX_UPLOAD_SIZE) {
+      return errorResponse(
+        400,
+        `File size ${fileSize} bytes exceeds maximum of 10 MB (${MAX_UPLOAD_SIZE} bytes)`,
+        'FILE_TOO_LARGE',
+      );
+    }
+
+    // Step 8: Generate scoped S3 key
     const id = ulid();
     const key = `receipts/${accountId}/${id}.${extension}`;
 
-    // Step 6: Get presigned URL
+    // Step 9: Get presigned URL with ContentLength constraint
     const uploadUrl = await deps.getSignedUrl(
       deps.bucketName,
       key,
       contentType,
+      fileSize,
       PRESIGNED_URL_TTL,
     );
 
-    // Step 7: Return response
-    return successResponse({ uploadUrl, key });
+    // Step 10: Return response with maxFileSize for client reference
+    return successResponse({ uploadUrl, key, maxFileSize: MAX_UPLOAD_SIZE });
   };
 }

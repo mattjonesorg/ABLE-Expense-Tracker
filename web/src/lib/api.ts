@@ -37,6 +37,8 @@ export interface ListExpensesFilters {
   category?: AbleCategory | '';
   startDate?: string;
   endDate?: string;
+  /** Filter by reimbursement status: 'true' for reimbursed, 'false' for unreimbursed */
+  reimbursed?: 'true' | 'false';
 }
 
 // --- Error Classes ---
@@ -164,6 +166,7 @@ export async function listExpenses(filters?: ListExpensesFilters): Promise<Expen
   if (filters?.category) { params.set('category', filters.category); }
   if (filters?.startDate) { params.set('startDate', filters.startDate); }
   if (filters?.endDate) { params.set('endDate', filters.endDate); }
+  if (filters?.reimbursed) { params.set('reimbursed', filters.reimbursed); }
 
   const queryString = params.toString();
   const path = queryString ? `/expenses?${queryString}` : '/expenses';
@@ -197,8 +200,15 @@ export async function categorizeExpense(data: CategorizeInput): Promise<Category
   return result as CategoryResult;
 }
 
-export async function reimburseExpense(id: string): Promise<Expense> {
-  const response = await apiRequest(`/expenses/${encodeURIComponent(id)}/reimburse`, { method: 'POST' });
+export async function reimburseExpense(id: string, reimbursedBy: string): Promise<Expense> {
+  const response = await apiRequest(
+    `/expenses/${encodeURIComponent(id)}/reimburse`,
+    {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reimbursedBy }),
+    },
+  );
   return (await safeParseJson(response)) as Expense;
 }
 
