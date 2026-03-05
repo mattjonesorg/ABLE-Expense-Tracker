@@ -12,9 +12,10 @@ import {
   SimpleGrid,
   Anchor,
   Button,
+  Alert,
 } from '@mantine/core';
 import { IconCash, IconPlus, IconReceipt, IconCheck } from '@tabler/icons-react';
-import { listExpenses } from '../lib/api';
+import { listExpenses, reimburseExpense } from '../lib/api';
 import { formatCents, formatDate } from '../lib/format';
 import type { Expense } from '../lib/types';
 
@@ -49,6 +50,8 @@ function aggregateReimbursements(expenses: Expense[]): ReimbursementByPerson[] {
 export function Reimbursements() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [reimbursingId, setReimbursingId] = useState<string | null>(null);
+  const [reimburseError, setReimburseError] = useState<string | null>(null);
 
   const fetchExpenses = useCallback(async () => {
     setIsLoading(true);
@@ -63,6 +66,31 @@ export function Reimbursements() {
   useEffect(() => {
     void fetchExpenses();
   }, [fetchExpenses]);
+
+  const handleMarkReimbursed = useCallback(
+    async (expense: Expense) => {
+      const confirmed = window.confirm(
+        `Mark ${expense.vendor} expense of ${formatCents(expense.amount)} paid by ${expense.paidBy} as reimbursed?`,
+      );
+      if (!confirmed) return;
+
+      setReimburseError(null);
+      setReimbursingId(expense.expenseId);
+      try {
+        await reimburseExpense(expense.expenseId, expense.paidBy);
+        await fetchExpenses();
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : 'Failed to mark expense as reimbursed.';
+        setReimburseError(message);
+      } finally {
+        setReimbursingId(null);
+      }
+    },
+    [fetchExpenses],
+  );
 
   const reimbursements = aggregateReimbursements(expenses);
   const totalUnreimbursed = reimbursements.reduce((sum, r) => sum + r.totalOwed, 0);
@@ -130,6 +158,13 @@ export function Reimbursements() {
           </SimpleGrid>
 
           <Title order={3}>Unreimbursed Expenses</Title>
+
+          {reimburseError && (
+            <Alert color="red" role="alert" onClose={() => setReimburseError(null)} withCloseButton>
+              {reimburseError}
+            </Alert>
+          )}
+
           <Paper withBorder radius="md" style={{ overflow: 'auto' }}>
             <Table striped highlightOnHover>
               <Table.Thead>
@@ -138,6 +173,7 @@ export function Reimbursements() {
                   <Table.Th>Vendor</Table.Th>
                   <Table.Th>Paid By</Table.Th>
                   <Table.Th style={{ textAlign: 'right' }}>Amount</Table.Th>
+                  <Table.Th>Actions</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -148,6 +184,20 @@ export function Reimbursements() {
                     <Table.Td>{expense.paidBy}</Table.Td>
                     <Table.Td style={{ textAlign: 'right' }}>
                       {formatCents(expense.amount)}
+                    </Table.Td>
+                    <Table.Td>
+                      <Button
+                        size="compact-sm"
+                        color="green"
+                        variant="light"
+                        leftSection={<IconCheck size={14} />}
+                        loading={reimbursingId === expense.expenseId}
+                        disabled={reimbursingId !== null && reimbursingId !== expense.expenseId}
+                        aria-label={`Mark ${expense.vendor} expense as reimbursed`}
+                        onClick={() => void handleMarkReimbursed(expense)}
+                      >
+                        Mark Reimbursed
+                      </Button>
                     </Table.Td>
                   </Table.Tr>
                 ))}
