@@ -265,6 +265,135 @@ describe('Expenses Page', () => {
     });
   });
 
+  describe('reimbursement status filter', () => {
+    it('renders a reimbursement status filter dropdown', async () => {
+      renderExpenses();
+      await waitFor(() => {
+        expect(screen.getByRole('table')).toBeInTheDocument();
+      });
+
+      const reimbursementInput = screen.getByRole('textbox', {
+        name: /reimbursement status/i,
+      });
+      expect(reimbursementInput).toBeInTheDocument();
+    });
+
+    it('defaults to "All" (no filter applied)', async () => {
+      renderExpenses();
+      await waitFor(() => {
+        expect(screen.getByRole('table')).toBeInTheDocument();
+      });
+
+      // The first call should not include a reimbursed filter
+      expect(mockListExpenses).toHaveBeenCalledWith({});
+    });
+
+    it('filters to unreimbursed expenses when "Unreimbursed" is selected', async () => {
+      mockListExpenses
+        .mockResolvedValueOnce(MOCK_EXPENSES)
+        .mockResolvedValueOnce([MOCK_EXPENSES[0], MOCK_EXPENSES[2]]);
+
+      const user = userEvent.setup();
+      renderExpenses();
+
+      await waitFor(() => {
+        expect(screen.getByRole('table')).toBeInTheDocument();
+      });
+
+      const reimbursementInput = screen.getByRole('textbox', {
+        name: /reimbursement status/i,
+      });
+      await user.click(reimbursementInput);
+
+      const option = await screen.findByRole('option', {
+        name: /unreimbursed/i,
+      });
+      await user.click(option);
+
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith(
+          expect.objectContaining({ reimbursed: 'false' }),
+        );
+      });
+    });
+
+    it('filters to reimbursed expenses when "Reimbursed" is selected', async () => {
+      mockListExpenses
+        .mockResolvedValueOnce(MOCK_EXPENSES)
+        .mockResolvedValueOnce([MOCK_EXPENSES[1]]);
+
+      const user = userEvent.setup();
+      renderExpenses();
+
+      await waitFor(() => {
+        expect(screen.getByRole('table')).toBeInTheDocument();
+      });
+
+      const reimbursementInput = screen.getByRole('textbox', {
+        name: /reimbursement status/i,
+      });
+      await user.click(reimbursementInput);
+
+      const option = await screen.findByRole('option', {
+        name: /^reimbursed$/i,
+      });
+      await user.click(option);
+
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith(
+          expect.objectContaining({ reimbursed: 'true' }),
+        );
+      });
+    });
+
+    it('works in combination with category filter', async () => {
+      mockListExpenses
+        .mockResolvedValueOnce(MOCK_EXPENSES)
+        .mockResolvedValueOnce([MOCK_EXPENSES[0]])
+        .mockResolvedValueOnce([]);
+
+      const user = userEvent.setup();
+      renderExpenses();
+
+      await waitFor(() => {
+        expect(screen.getByRole('table')).toBeInTheDocument();
+      });
+
+      // Select category filter first
+      const categoryInput = screen.getByRole('textbox', { name: /category/i });
+      await user.click(categoryInput);
+      const categoryOption = await screen.findByRole('option', {
+        name: /transportation/i,
+      });
+      await user.click(categoryOption);
+
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith(
+          expect.objectContaining({ category: 'Transportation' }),
+        );
+      });
+
+      // Then select reimbursement filter
+      const reimbursementInput = screen.getByRole('textbox', {
+        name: /reimbursement status/i,
+      });
+      await user.click(reimbursementInput);
+      const reimbursedOption = await screen.findByRole('option', {
+        name: /unreimbursed/i,
+      });
+      await user.click(reimbursedOption);
+
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith(
+          expect.objectContaining({
+            category: 'Transportation',
+            reimbursed: 'false',
+          }),
+        );
+      });
+    });
+  });
+
   describe('clear filters', () => {
     it('renders a clear filters button', async () => {
       renderExpenses();
@@ -275,6 +404,49 @@ describe('Expenses Page', () => {
       expect(
         screen.getByRole('button', { name: /clear filters/i }),
       ).toBeInTheDocument();
+    });
+
+    it('resets reimbursement status filter when clear filters is clicked', async () => {
+      mockListExpenses
+        .mockResolvedValueOnce(MOCK_EXPENSES)
+        .mockResolvedValueOnce([MOCK_EXPENSES[1]])
+        .mockResolvedValueOnce(MOCK_EXPENSES);
+
+      const user = userEvent.setup();
+      renderExpenses();
+
+      await waitFor(() => {
+        expect(screen.getByRole('table')).toBeInTheDocument();
+      });
+
+      // Select reimbursement filter
+      const reimbursementInput = screen.getByRole('textbox', {
+        name: /reimbursement status/i,
+      });
+      await user.click(reimbursementInput);
+      const option = await screen.findByRole('option', {
+        name: /^reimbursed$/i,
+      });
+      await user.click(option);
+
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith(
+          expect.objectContaining({ reimbursed: 'true' }),
+        );
+      });
+
+      // Click clear filters
+      const clearButton = screen.getByRole('button', {
+        name: /clear filters/i,
+      });
+      await user.click(clearButton);
+
+      // Should refetch without reimbursed filter
+      await waitFor(() => {
+        const lastCall =
+          mockListExpenses.mock.calls[mockListExpenses.mock.calls.length - 1];
+        expect(lastCall[0]).toEqual({});
+      });
     });
   });
 
