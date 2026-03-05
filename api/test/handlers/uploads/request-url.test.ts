@@ -3,7 +3,7 @@ import type { APIGatewayProxyEventV2 } from 'aws-lambda';
 import type { AuthResult } from '../../../src/middleware/auth.js';
 import type { AuthContext } from '../../../src/middleware/auth.js';
 import { extractAuthContext } from '../../../src/middleware/auth.js';
-import { createUploadUrlHandler } from '../../../src/handlers/uploads/request-url.js';
+import { createUploadUrlHandler, MAX_UPLOAD_SIZE } from '../../../src/handlers/uploads/request-url.js';
 import type { UploadHandlerDeps } from '../../../src/handlers/uploads/request-url.js';
 
 /**
@@ -63,10 +63,15 @@ function makeDeps(overrides: Partial<UploadHandlerDeps> = {}): UploadHandlerDeps
 
   return {
     authenticate: overrides.authenticate ?? vi.fn<(event: APIGatewayProxyEventV2) => Promise<AuthResult>>().mockResolvedValue(successAuth),
-    getSignedUrl: overrides.getSignedUrl ?? vi.fn<(bucketName: string, key: string, contentType: string, expiresIn: number) => Promise<string>>().mockResolvedValue('https://s3.amazonaws.com/test-bucket/presigned-url'),
+    getSignedUrl: overrides.getSignedUrl ?? vi.fn<(bucketName: string, key: string, contentType: string, contentLength: number, expiresIn: number) => Promise<string>>().mockResolvedValue('https://s3.amazonaws.com/test-bucket/presigned-url'),
     bucketName: overrides.bucketName ?? 'test-receipt-bucket',
   };
 }
+
+/**
+ * Valid file size for tests (1 MB).
+ */
+const VALID_FILE_SIZE = 1_048_576;
 
 describe('createUploadUrlHandler', () => {
   describe('successful presigned URL generation', () => {
@@ -75,7 +80,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'image/jpeg' }),
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: VALID_FILE_SIZE }),
       });
       const result = await handler(event);
 
@@ -92,7 +97,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'image/jpeg' }),
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: VALID_FILE_SIZE }),
       });
       const result = await handler(event);
       const body = JSON.parse(result.body as string) as { uploadUrl: string; key: string };
@@ -106,7 +111,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'image/png' }),
+        body: JSON.stringify({ contentType: 'image/png', fileSize: VALID_FILE_SIZE }),
       });
       const result = await handler(event);
       const body = JSON.parse(result.body as string) as { uploadUrl: string; key: string };
@@ -114,6 +119,19 @@ describe('createUploadUrlHandler', () => {
       // key should be a non-empty string in the expected format
       expect(body.key).toBeTruthy();
       expect(body.key).toMatch(/^receipts\/acct_01HXYZ\/.+\.png$/);
+    });
+
+    it('returns maxFileSize in the response', async () => {
+      const deps = makeDeps();
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEvent({
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: VALID_FILE_SIZE }),
+      });
+      const result = await handler(event);
+      const body = JSON.parse(result.body as string) as { maxFileSize: number };
+
+      expect(body.maxFileSize).toBe(MAX_UPLOAD_SIZE);
     });
   });
 
@@ -123,7 +141,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'image/jpeg' }),
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: VALID_FILE_SIZE }),
       });
       const result = await handler(event);
 
@@ -137,7 +155,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'image/png' }),
+        body: JSON.stringify({ contentType: 'image/png', fileSize: VALID_FILE_SIZE }),
       });
       const result = await handler(event);
 
@@ -151,7 +169,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'image/webp' }),
+        body: JSON.stringify({ contentType: 'image/webp', fileSize: VALID_FILE_SIZE }),
       });
       const result = await handler(event);
 
@@ -165,7 +183,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'application/pdf' }),
+        body: JSON.stringify({ contentType: 'application/pdf', fileSize: VALID_FILE_SIZE }),
       });
       const result = await handler(event);
 
@@ -180,7 +198,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({}),
+        body: JSON.stringify({ fileSize: VALID_FILE_SIZE }),
       });
       const result = await handler(event);
 
@@ -188,6 +206,123 @@ describe('createUploadUrlHandler', () => {
       const body = JSON.parse(result.body as string) as { error: string; code: string };
       expect(body.error).toContain('contentType');
       expect(body.code).toBe('MISSING_CONTENT_TYPE');
+    });
+  });
+
+  describe('file size validation (#46)', () => {
+    it('exports MAX_UPLOAD_SIZE as 10 MB (10485760 bytes)', () => {
+      expect(MAX_UPLOAD_SIZE).toBe(10 * 1024 * 1024);
+    });
+
+    it('rejects request when fileSize is missing with 400', async () => {
+      const deps = makeDeps();
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEvent({
+        body: JSON.stringify({ contentType: 'image/jpeg' }),
+      });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body as string) as { error: string; code: string };
+      expect(body.error).toContain('fileSize');
+      expect(body.code).toBe('MISSING_FILE_SIZE');
+    });
+
+    it('rejects request when fileSize exceeds 10 MB with 400', async () => {
+      const deps = makeDeps();
+      const handler = createUploadUrlHandler(deps);
+
+      const oversizedFileSize = MAX_UPLOAD_SIZE + 1;
+      const event = makeEvent({
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: oversizedFileSize }),
+      });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body as string) as { error: string; code: string };
+      expect(body.error).toContain('10 MB');
+      expect(body.code).toBe('FILE_TOO_LARGE');
+    });
+
+    it('rejects request when fileSize is zero with 400', async () => {
+      const deps = makeDeps();
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEvent({
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: 0 }),
+      });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body as string) as { error: string; code: string };
+      expect(body.code).toBe('INVALID_FILE_SIZE');
+    });
+
+    it('rejects request when fileSize is negative with 400', async () => {
+      const deps = makeDeps();
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEvent({
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: -100 }),
+      });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body as string) as { error: string; code: string };
+      expect(body.code).toBe('INVALID_FILE_SIZE');
+    });
+
+    it('rejects request when fileSize is not a number with 400', async () => {
+      const deps = makeDeps();
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEvent({
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: 'big' }),
+      });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body as string) as { error: string; code: string };
+      expect(body.code).toBe('INVALID_FILE_SIZE');
+    });
+
+    it('rejects request when fileSize is a fractional number with 400', async () => {
+      const deps = makeDeps();
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEvent({
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: 1024.5 }),
+      });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body as string) as { error: string; code: string };
+      expect(body.code).toBe('INVALID_FILE_SIZE');
+    });
+
+    it('accepts request when fileSize is exactly 10 MB', async () => {
+      const deps = makeDeps();
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEvent({
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: MAX_UPLOAD_SIZE }),
+      });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+    });
+
+    it('accepts request when fileSize is 1 byte', async () => {
+      const deps = makeDeps();
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEvent({
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: 1 }),
+      });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
     });
   });
 
@@ -207,7 +342,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'image/jpeg' }),
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: VALID_FILE_SIZE }),
       });
       const result = await handler(event);
 
@@ -219,25 +354,25 @@ describe('createUploadUrlHandler', () => {
 
   describe('presigner configuration', () => {
     it('passes TTL of at most 900 seconds (15 min) to the presigner', async () => {
-      const mockGetSignedUrl = vi.fn<(bucketName: string, key: string, contentType: string, expiresIn: number) => Promise<string>>().mockResolvedValue('https://s3.amazonaws.com/test-bucket/presigned-url');
+      const mockGetSignedUrl = vi.fn<(bucketName: string, key: string, contentType: string, contentLength: number, expiresIn: number) => Promise<string>>().mockResolvedValue('https://s3.amazonaws.com/test-bucket/presigned-url');
       const deps = makeDeps({ getSignedUrl: mockGetSignedUrl });
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'image/jpeg' }),
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: VALID_FILE_SIZE }),
       });
       await handler(event);
 
       expect(mockGetSignedUrl).toHaveBeenCalledOnce();
       const callArgs = mockGetSignedUrl.mock.calls[0];
-      // callArgs: [bucketName, key, contentType, expiresIn]
-      const expiresIn = callArgs[3];
+      // callArgs: [bucketName, key, contentType, contentLength, expiresIn]
+      const expiresIn = callArgs[4];
       expect(expiresIn).toBeLessThanOrEqual(900);
       expect(expiresIn).toBeGreaterThan(0);
     });
 
     it('passes the correct bucket name to the presigner', async () => {
-      const mockGetSignedUrl = vi.fn<(bucketName: string, key: string, contentType: string, expiresIn: number) => Promise<string>>().mockResolvedValue('https://s3.amazonaws.com/test-bucket/presigned-url');
+      const mockGetSignedUrl = vi.fn<(bucketName: string, key: string, contentType: string, contentLength: number, expiresIn: number) => Promise<string>>().mockResolvedValue('https://s3.amazonaws.com/test-bucket/presigned-url');
       const deps = makeDeps({
         getSignedUrl: mockGetSignedUrl,
         bucketName: 'my-custom-bucket',
@@ -245,7 +380,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'image/jpeg' }),
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: VALID_FILE_SIZE }),
       });
       await handler(event);
 
@@ -255,18 +390,34 @@ describe('createUploadUrlHandler', () => {
     });
 
     it('passes the correct content type to the presigner', async () => {
-      const mockGetSignedUrl = vi.fn<(bucketName: string, key: string, contentType: string, expiresIn: number) => Promise<string>>().mockResolvedValue('https://s3.amazonaws.com/test-bucket/presigned-url');
+      const mockGetSignedUrl = vi.fn<(bucketName: string, key: string, contentType: string, contentLength: number, expiresIn: number) => Promise<string>>().mockResolvedValue('https://s3.amazonaws.com/test-bucket/presigned-url');
       const deps = makeDeps({ getSignedUrl: mockGetSignedUrl });
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEvent({
-        body: JSON.stringify({ contentType: 'image/png' }),
+        body: JSON.stringify({ contentType: 'image/png', fileSize: VALID_FILE_SIZE }),
       });
       await handler(event);
 
       expect(mockGetSignedUrl).toHaveBeenCalledOnce();
       const callArgs = mockGetSignedUrl.mock.calls[0];
       expect(callArgs[2]).toBe('image/png');
+    });
+
+    it('passes the file size as contentLength to the presigner', async () => {
+      const mockGetSignedUrl = vi.fn<(bucketName: string, key: string, contentType: string, contentLength: number, expiresIn: number) => Promise<string>>().mockResolvedValue('https://s3.amazonaws.com/test-bucket/presigned-url');
+      const deps = makeDeps({ getSignedUrl: mockGetSignedUrl });
+      const handler = createUploadUrlHandler(deps);
+
+      const event = makeEvent({
+        body: JSON.stringify({ contentType: 'image/jpeg', fileSize: 5_242_880 }),
+      });
+      await handler(event);
+
+      expect(mockGetSignedUrl).toHaveBeenCalledOnce();
+      const callArgs = mockGetSignedUrl.mock.calls[0];
+      // callArgs[3] is contentLength
+      expect(callArgs[3]).toBe(5_242_880);
     });
   });
 
@@ -296,7 +447,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEventWithAuthorizer(
-        JSON.stringify({ contentType: 'image/jpeg' }),
+        JSON.stringify({ contentType: 'image/jpeg', fileSize: VALID_FILE_SIZE }),
         undefined,
       );
       const result = await handler(event);
@@ -313,7 +464,7 @@ describe('createUploadUrlHandler', () => {
       const handler = createUploadUrlHandler(deps);
 
       const event = makeEventWithAuthorizer(
-        JSON.stringify({ contentType: 'image/jpeg' }),
+        JSON.stringify({ contentType: 'image/jpeg', fileSize: VALID_FILE_SIZE }),
         { sub: 'some-sub' }, // missing email, accountId, role
       );
       const result = await handler(event);
@@ -335,7 +486,7 @@ describe('createUploadUrlHandler', () => {
         'custom:role': 'owner',
       };
       const event = makeEventWithAuthorizer(
-        JSON.stringify({ contentType: 'image/jpeg' }),
+        JSON.stringify({ contentType: 'image/jpeg', fileSize: VALID_FILE_SIZE }),
         claims,
       );
       const result = await handler(event);
