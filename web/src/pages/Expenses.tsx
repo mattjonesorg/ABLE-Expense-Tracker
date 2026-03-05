@@ -20,10 +20,17 @@ import { CATEGORY_FILTER_OPTIONS } from '../lib/categories';
 import { formatCents, formatDate } from '../lib/format';
 import type { Expense, AbleCategory } from '../lib/types';
 
+/** Options for the reimbursement status filter dropdown */
+const REIMBURSEMENT_STATUS_OPTIONS = [
+  { value: 'false', label: 'Unreimbursed' },
+  { value: 'true', label: 'Reimbursed' },
+];
+
 export function Expenses() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [reimbursementFilter, setReimbursementFilter] = useState<string>('');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
 
@@ -33,6 +40,9 @@ export function Expenses() {
       const filters: ListExpensesFilters = {};
       if (categoryFilter) {
         filters.category = categoryFilter as AbleCategory;
+      }
+      if (reimbursementFilter) {
+        filters.reimbursed = reimbursementFilter as 'true' | 'false';
       }
       if (startDate) {
         filters.startDate = formatISODate(startDate);
@@ -45,7 +55,7 @@ export function Expenses() {
     } finally {
       setIsLoading(false);
     }
-  }, [categoryFilter, startDate, endDate]);
+  }, [categoryFilter, reimbursementFilter, startDate, endDate]);
 
   useEffect(() => {
     void fetchExpenses();
@@ -53,6 +63,7 @@ export function Expenses() {
 
   const handleClearFilters = () => {
     setCategoryFilter('');
+    setReimbursementFilter('');
     setStartDate(null);
     setEndDate(null);
   };
@@ -87,6 +98,15 @@ export function Expenses() {
             onChange={(value) => setCategoryFilter(value ?? '')}
             clearable
             w={250}
+          />
+          <Select
+            label="Reimbursement Status"
+            placeholder="All"
+            data={REIMBURSEMENT_STATUS_OPTIONS}
+            value={reimbursementFilter}
+            onChange={(value) => setReimbursementFilter(value ?? '')}
+            clearable
+            w={200}
           />
           <DateInput
             label="From date"

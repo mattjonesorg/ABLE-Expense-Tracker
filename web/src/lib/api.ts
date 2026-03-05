@@ -37,6 +37,8 @@ export interface ListExpensesFilters {
   category?: AbleCategory | '';
   startDate?: string;
   endDate?: string;
+  /** Filter by reimbursement status: 'true' for reimbursed, 'false' for unreimbursed */
+  reimbursed?: 'true' | 'false';
 }
 
 // --- Error Classes ---
@@ -164,6 +166,7 @@ export async function listExpenses(filters?: ListExpensesFilters): Promise<Expen
   if (filters?.category) { params.set('category', filters.category); }
   if (filters?.startDate) { params.set('startDate', filters.startDate); }
   if (filters?.endDate) { params.set('endDate', filters.endDate); }
+  if (filters?.reimbursed) { params.set('reimbursed', filters.reimbursed); }
 
   const queryString = params.toString();
   const path = queryString ? `/expenses?${queryString}` : '/expenses';
