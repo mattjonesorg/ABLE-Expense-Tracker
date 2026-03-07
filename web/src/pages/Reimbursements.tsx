@@ -102,11 +102,11 @@ export function Reimbursements() {
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="center">
-        <Title order={2}>Reimbursements</Title>
+        <Title order={1}>Reimbursements</Title>
         <Button
           component={Link}
           to="/expenses/new"
-          leftSection={<IconPlus size={16} />}
+          leftSection={<IconPlus size={16} aria-hidden="true" />}
           size="sm"
         >
           Add Expense
@@ -123,7 +123,7 @@ export function Reimbursements() {
         <>
           <Paper withBorder p="lg" radius="md">
             <Group gap="sm" align="center">
-              <IconCash size={24} stroke={1.5} />
+              <IconCash size={24} stroke={1.5} aria-hidden="true" />
               <div>
                 <Text size="sm" c="dimmed">
                   Total Unreimbursed
@@ -157,7 +157,7 @@ export function Reimbursements() {
             ))}
           </SimpleGrid>
 
-          <Title order={3}>Unreimbursed Expenses</Title>
+          <Title order={2}>Unreimbursed Expenses</Title>
 
           {reimburseError && (
             <Alert color="red" role="alert" onClose={() => setReimburseError(null)} withCloseButton>
@@ -166,7 +166,7 @@ export function Reimbursements() {
           )}
 
           <Paper withBorder radius="md" style={{ overflow: 'auto' }}>
-            <Table striped highlightOnHover>
+            <Table striped highlightOnHover aria-label="Unreimbursed expenses">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Date</Table.Th>
@@ -190,7 +190,7 @@ export function Reimbursements() {
                         size="compact-sm"
                         color="green"
                         variant="light"
-                        leftSection={<IconCheck size={14} />}
+                        leftSection={<IconCheck size={14} aria-hidden="true" />}
                         loading={reimbursingId === expense.expenseId}
                         disabled={reimbursingId !== null && reimbursingId !== expense.expenseId}
                         aria-label={`Mark ${expense.vendor} expense as reimbursed`}
@@ -212,7 +212,7 @@ export function Reimbursements() {
 
 function ReimbursementsLoadingSkeleton() {
   return (
-    <Paper withBorder p="md" radius="md" data-testid="reimbursements-loading">
+    <Paper withBorder p="md" radius="md" data-testid="reimbursements-loading" role="status" aria-label="Loading reimbursements">
       <Stack gap="sm">
         <Skeleton height={20} width="100%" />
         <Skeleton height={20} width="100%" />
@@ -226,7 +226,7 @@ function ReimbursementsLoadingSkeleton() {
 function ReimbursementsEmptyState() {
   return (
     <Paper withBorder p="xl" radius="md" ta="center">
-      <IconReceipt size={48} stroke={1.5} color="gray" />
+      <IconReceipt size={48} stroke={1.5} color="gray" aria-hidden="true" />
       <Text c="dimmed" mt="md">
         No expenses yet. Add your first expense to start tracking reimbursements.
       </Text>
@@ -240,7 +240,7 @@ function ReimbursementsEmptyState() {
 function AllCaughtUpState() {
   return (
     <Paper withBorder p="xl" radius="md" ta="center">
-      <IconCheck size={48} stroke={1.5} color="teal" />
+      <IconCheck size={48} stroke={1.5} color="teal" aria-hidden="true" />
       <Text fw={500} mt="md">
         All caught up!
       </Text>

@@ -55,7 +55,7 @@ export function Login() {
       </Title>
 
       <Paper withBorder shadow="md" p={30} mt={30} radius="md">
-        <form onSubmit={form.onSubmit(handleSubmit)}>
+        <form onSubmit={form.onSubmit(handleSubmit)} aria-label="Sign in form">
           <Stack>
             <TextInput
               label="Email"

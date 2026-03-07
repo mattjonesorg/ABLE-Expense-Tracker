@@ -84,13 +84,13 @@ export function Dashboard() {
   return (
     <Stack gap="lg">
       <div>
-        <Title order={2}>Dashboard</Title>
+        <Title order={1}>Dashboard</Title>
         <Text c="dimmed" mt="xs">
           Welcome, {user?.displayName}
         </Text>
       </div>
 
-      <Title order={3}>Quick Actions</Title>
+      <Title order={2}>Quick Actions</Title>
       <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
         {quickActions.map((action) => (
           <Card
@@ -105,7 +105,7 @@ export function Dashboard() {
           >
             <Group>
               <ThemeIcon size="lg" radius="md" variant="light" color={action.color}>
-                <action.icon size={20} stroke={1.5} />
+                <action.icon size={20} stroke={1.5} aria-hidden="true" />
               </ThemeIcon>
               <div>
                 <Text fw={500}>{action.title}</Text>
@@ -121,7 +121,7 @@ export function Dashboard() {
       {isLoading && <DashboardLoadingSkeleton />}
 
       {!isLoading && error && (
-        <Paper withBorder p="xl" radius="md" ta="center">
+        <Paper withBorder p="xl" radius="md" ta="center" role="alert">
           <Text c="red">Failed to load dashboard data</Text>
         </Paper>
       )}
@@ -130,11 +130,11 @@ export function Dashboard() {
 
       {!isLoading && !error && hasData && (
         <>
-          <Title order={3}>Reimbursements</Title>
+          <Title order={2}>Reimbursements</Title>
           <Paper withBorder p="md" radius="md">
             <Group gap="xs" mb="md">
               <ThemeIcon size="lg" radius="md" variant="light" color="green">
-                <IconWallet size={20} stroke={1.5} />
+                <IconWallet size={20} stroke={1.5} aria-hidden="true" />
               </ThemeIcon>
               <div>
                 <Text size="sm" c="dimmed">Total Unreimbursed</Text>
@@ -148,7 +148,7 @@ export function Dashboard() {
                   <Card key={summary.userId} withBorder padding="sm" radius="md">
                     <Group>
                       <ThemeIcon size="md" radius="md" variant="light" color="orange">
-                        <IconCash size={16} stroke={1.5} />
+                        <IconCash size={16} stroke={1.5} aria-hidden="true" />
                       </ThemeIcon>
                       <div>
                         <Text fw={500}>{summary.displayName}</Text>
@@ -165,7 +165,7 @@ export function Dashboard() {
 
           {recentExpenses.length > 0 && (
             <>
-              <Title order={3}>Recent Expenses</Title>
+              <Title order={2}>Recent Expenses</Title>
               <Paper withBorder radius="md" p="md">
                 <Stack gap="xs">
                   {recentExpenses.map((expense) => (
@@ -189,7 +189,7 @@ export function Dashboard() {
 
 function DashboardLoadingSkeleton() {
   return (
-    <Paper withBorder p="md" radius="md" data-testid="dashboard-loading">
+    <Paper withBorder p="md" radius="md" data-testid="dashboard-loading" role="status" aria-label="Loading dashboard data">
       <Stack gap="sm">
         <Skeleton height={20} width="60%" />
         <Skeleton height={40} width="40%" />
@@ -204,7 +204,7 @@ function DashboardLoadingSkeleton() {
 function DashboardEmptyState() {
   return (
     <Paper withBorder p="xl" radius="md" ta="center">
-      <IconReceipt size={48} stroke={1.5} color="gray" />
+      <IconReceipt size={48} stroke={1.5} color="gray" aria-hidden="true" />
       <Text c="dimmed" mt="md">
         No expenses yet. Get started by recording your first one.
       </Text>

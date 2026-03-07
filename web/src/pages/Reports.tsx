@@ -196,7 +196,7 @@ export function Reports() {
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="center">
-        <Title order={2}>Reports</Title>
+        <Title order={1}>Reports</Title>
       </Group>
 
       {/* Date range filter */}
@@ -221,14 +221,14 @@ export function Reports() {
             />
             <Button
               variant="subtle"
-              leftSection={<IconFilterOff size={16} />}
+              leftSection={<IconFilterOff size={16} aria-hidden="true" />}
               onClick={handleClearFilters}
             >
               Clear filters
             </Button>
           </Group>
           <Group gap="xs" wrap="wrap">
-            <IconCalendar size={16} stroke={1.5} />
+            <IconCalendar size={16} stroke={1.5} aria-hidden="true" />
             <Button variant="light" size="xs" onClick={handlePresetThisMonth}>
               This Month
             </Button>
@@ -258,7 +258,7 @@ export function Reports() {
           <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="md">
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group gap="sm" align="center">
-                <IconReceipt size={24} stroke={1.5} />
+                <IconReceipt size={24} stroke={1.5} aria-hidden="true" />
                 <div>
                   <Text size="sm" c="dimmed">
                     Total Expenses
@@ -272,7 +272,7 @@ export function Reports() {
 
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group gap="sm" align="center">
-                <IconChartBar size={24} stroke={1.5} />
+                <IconChartBar size={24} stroke={1.5} aria-hidden="true" />
                 <div>
                   <Text size="sm" c="dimmed">
                     Total Amount
@@ -286,7 +286,7 @@ export function Reports() {
 
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group gap="sm" align="center">
-                <IconCheck size={24} stroke={1.5} />
+                <IconCheck size={24} stroke={1.5} aria-hidden="true" />
                 <div>
                   <Text size="sm" c="dimmed">
                     Total Reimbursed
@@ -300,7 +300,7 @@ export function Reports() {
 
             <Card shadow="sm" padding="lg" radius="md" withBorder>
               <Group gap="sm" align="center">
-                <IconCash size={24} stroke={1.5} />
+                <IconCash size={24} stroke={1.5} aria-hidden="true" />
                 <div>
                   <Text size="sm" c="dimmed">
                     Total Unreimbursed
@@ -314,9 +314,9 @@ export function Reports() {
           </SimpleGrid>
 
           {/* Category breakdown */}
-          <Title order={3}>By Category</Title>
+          <Title order={2}>By Category</Title>
           <Paper withBorder radius="md" style={{ overflow: 'auto' }} data-testid="category-table">
-            <Table striped highlightOnHover>
+            <Table striped highlightOnHover aria-label="Expenses by category">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Category</Table.Th>
@@ -341,9 +341,9 @@ export function Reports() {
           </Paper>
 
           {/* Person breakdown */}
-          <Title order={3}>By Person</Title>
+          <Title order={2}>By Person</Title>
           <Paper withBorder radius="md" style={{ overflow: 'auto' }} data-testid="person-table">
-            <Table striped highlightOnHover>
+            <Table striped highlightOnHover aria-label="Expenses by person">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Person</Table.Th>
@@ -382,7 +382,7 @@ export function Reports() {
 
 function ReportsLoadingSkeleton() {
   return (
-    <Paper withBorder p="md" radius="md" data-testid="reports-loading">
+    <Paper withBorder p="md" radius="md" data-testid="reports-loading" role="status" aria-label="Loading reports">
       <Stack gap="sm">
         <Skeleton height={20} width="100%" />
         <Skeleton height={20} width="100%" />
@@ -396,7 +396,7 @@ function ReportsLoadingSkeleton() {
 function ReportsEmptyState() {
   return (
     <Paper withBorder p="xl" radius="md" ta="center">
-      <IconReceipt size={48} stroke={1.5} color="gray" />
+      <IconReceipt size={48} stroke={1.5} color="gray" aria-hidden="true" />
       <Text c="dimmed" mt="md">
         No expenses yet. Add your first expense to start viewing reports.
       </Text>
