@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MantineProvider } from '@mantine/core';
@@ -160,7 +160,9 @@ describe('Reports Page', () => {
       await waitFor(() => {
         expect(screen.getByText('$363.49')).toBeInTheDocument();
       });
-      expect(screen.getByText(/total amount/i)).toBeInTheDocument();
+      // "Total Amount" appears in both summary card and person table header;
+      // verify at least one is present
+      expect(screen.getAllByText(/total amount/i).length).toBeGreaterThanOrEqual(1);
     });
 
     it('displays total reimbursed amount', async () => {
@@ -195,27 +197,28 @@ describe('Reports Page', () => {
     it('renders a table with category name, count, and total columns', async () => {
       renderReports();
       await waitFor(() => {
-        expect(screen.getByRole('table')).toBeInTheDocument();
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
       });
 
+      const table = screen.getByTestId('category-table');
       expect(
-        screen.getByRole('columnheader', { name: /category/i }),
+        within(table).getByRole('columnheader', { name: /category/i }),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole('columnheader', { name: /count/i }),
+        within(table).getByRole('columnheader', { name: /count/i }),
       ).toBeInTheDocument();
       expect(
-        screen.getByRole('columnheader', { name: /total/i }),
+        within(table).getByRole('columnheader', { name: /total/i }),
       ).toBeInTheDocument();
     });
 
     it('shows each category with its expense count and total amount', async () => {
       renderReports();
       await waitFor(() => {
-        expect(screen.getByRole('table')).toBeInTheDocument();
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
       });
 
-      const table = screen.getByRole('table');
+      const table = screen.getByTestId('category-table');
       const rows = within(table).getAllByRole('row');
       // Header + 4 category rows (Transportation, Health, Basic living, Assistive tech)
       // At minimum there should be category rows for the 4 unique categories in our data
@@ -237,10 +240,10 @@ describe('Reports Page', () => {
     it('aggregates counts correctly per category', async () => {
       renderReports();
       await waitFor(() => {
-        expect(screen.getByRole('table')).toBeInTheDocument();
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
       });
 
-      const table = screen.getByRole('table');
+      const table = screen.getByTestId('category-table');
       const rows = within(table).getAllByRole('row');
 
       // Basic living expenses has 2 expenses (Whole Foods + Target)
@@ -259,7 +262,7 @@ describe('Reports Page', () => {
     it('renders from and to date input fields', async () => {
       renderReports();
       await waitFor(() => {
-        expect(screen.getByRole('table')).toBeInTheDocument();
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
       });
 
       expect(screen.getByLabelText(/from date/i)).toBeInTheDocument();
@@ -271,7 +274,7 @@ describe('Reports Page', () => {
       renderReports();
 
       await waitFor(() => {
-        expect(screen.getByRole('table')).toBeInTheDocument();
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
       });
 
       // Type a date in the "From date" input
@@ -289,12 +292,286 @@ describe('Reports Page', () => {
     it('renders a clear filters button', async () => {
       renderReports();
       await waitFor(() => {
-        expect(screen.getByRole('table')).toBeInTheDocument();
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
       });
 
       expect(
         screen.getByRole('button', { name: /clear filters/i }),
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('person breakdown table', () => {
+    it('renders a "By Person" section heading', async () => {
+      renderReports();
+      await waitFor(() => {
+        expect(
+          screen.getByRole('heading', { name: /by person/i }),
+        ).toBeInTheDocument();
+      });
+    });
+
+    it('renders a table with person, count, total amount, reimbursed, and unreimbursed columns', async () => {
+      renderReports();
+      await waitFor(() => {
+        expect(screen.getByTestId('person-table')).toBeInTheDocument();
+      });
+
+      const table = screen.getByTestId('person-table');
+      expect(
+        within(table).getByRole('columnheader', { name: /person/i }),
+      ).toBeInTheDocument();
+      expect(
+        within(table).getByRole('columnheader', { name: /count/i }),
+      ).toBeInTheDocument();
+      expect(
+        within(table).getByRole('columnheader', { name: /total amount/i }),
+      ).toBeInTheDocument();
+      expect(
+        within(table).getByRole('columnheader', { name: /^reimbursed$/i }),
+      ).toBeInTheDocument();
+      expect(
+        within(table).getByRole('columnheader', { name: /^unreimbursed$/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('shows each person with their expense aggregates', async () => {
+      renderReports();
+      await waitFor(() => {
+        expect(screen.getByTestId('person-table')).toBeInTheDocument();
+      });
+
+      const table = screen.getByTestId('person-table');
+      // Matt and Sarah should both appear
+      expect(within(table).getByText('Matt')).toBeInTheDocument();
+      expect(within(table).getByText('Sarah')).toBeInTheDocument();
+    });
+
+    it('aggregates per-person data correctly for Matt', async () => {
+      renderReports();
+      await waitFor(() => {
+        expect(screen.getByTestId('person-table')).toBeInTheDocument();
+      });
+
+      const table = screen.getByTestId('person-table');
+      const rows = within(table).getAllByRole('row');
+      const mattRow = rows.find((row) => within(row).queryByText('Matt'));
+      expect(mattRow).toBeDefined();
+
+      // Matt: 3 expenses, total = 7500 + 4000 + 8999 = 20499 = $204.99
+      // Reimbursed = 8999 = $89.99, Unreimbursed = 7500 + 4000 = 11500 = $115.00
+      expect(within(mattRow!).getByText('3')).toBeInTheDocument();
+      expect(within(mattRow!).getByText('$204.99')).toBeInTheDocument();
+      expect(within(mattRow!).getByText('$89.99')).toBeInTheDocument();
+      expect(within(mattRow!).getByText('$115.00')).toBeInTheDocument();
+    });
+
+    it('aggregates per-person data correctly for Sarah', async () => {
+      renderReports();
+      await waitFor(() => {
+        expect(screen.getByTestId('person-table')).toBeInTheDocument();
+      });
+
+      const table = screen.getByTestId('person-table');
+      const rows = within(table).getAllByRole('row');
+      const sarahRow = rows.find((row) => within(row).queryByText('Sarah'));
+      expect(sarahRow).toBeDefined();
+
+      // Sarah: 2 expenses, total = 12350 + 3500 = 15850 = $158.50
+      // Reimbursed = 3500 = $35.00, Unreimbursed = 12350 = $123.50
+      expect(within(sarahRow!).getByText('2')).toBeInTheDocument();
+      expect(within(sarahRow!).getByText('$158.50')).toBeInTheDocument();
+      expect(within(sarahRow!).getByText('$35.00')).toBeInTheDocument();
+      expect(within(sarahRow!).getByText('$123.50')).toBeInTheDocument();
+    });
+
+    it('sorts persons by total amount descending', async () => {
+      renderReports();
+      await waitFor(() => {
+        expect(screen.getByTestId('person-table')).toBeInTheDocument();
+      });
+
+      const table = screen.getByTestId('person-table');
+      const rows = within(table).getAllByRole('row');
+      // rows[0] is the header row, rows[1] should be Matt ($204.99), rows[2] should be Sarah ($158.50)
+      expect(rows.length).toBe(3); // 1 header + 2 data rows
+      expect(within(rows[1]).getByText('Matt')).toBeInTheDocument();
+      expect(within(rows[2]).getByText('Sarah')).toBeInTheDocument();
+    });
+
+    it('does not show the person table in empty state', async () => {
+      mockListExpenses.mockResolvedValue([]);
+      renderReports();
+
+      await waitFor(() => {
+        expect(screen.getByText(/no expenses yet/i)).toBeInTheDocument();
+      });
+
+      expect(screen.queryByTestId('person-table')).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: /by person/i }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  describe('date range presets', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('renders preset buttons for common date ranges', async () => {
+      renderReports();
+      await waitFor(() => {
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
+      });
+
+      expect(
+        screen.getByRole('button', { name: /this month/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /last month/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /this year/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /last year/i }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /all time/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('sets "This Month" date range when clicked', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date(2026, 2, 15)); // March 15, 2026
+
+      const user = userEvent.setup({
+        advanceTimers: vi.advanceTimersByTime,
+      });
+      renderReports();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
+      });
+
+      mockListExpenses.mockClear();
+      await user.click(screen.getByRole('button', { name: /this month/i }));
+
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith(
+          expect.objectContaining({
+            startDate: '2026-03-01',
+          }),
+        );
+      });
+    });
+
+    it('sets "Last Month" date range when clicked', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date(2026, 2, 15)); // March 15, 2026
+
+      const user = userEvent.setup({
+        advanceTimers: vi.advanceTimersByTime,
+      });
+      renderReports();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
+      });
+
+      mockListExpenses.mockClear();
+      await user.click(screen.getByRole('button', { name: /last month/i }));
+
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith(
+          expect.objectContaining({
+            startDate: '2026-02-01',
+            endDate: '2026-02-28',
+          }),
+        );
+      });
+    });
+
+    it('sets "This Year" date range when clicked', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date(2026, 2, 15)); // March 15, 2026
+
+      const user = userEvent.setup({
+        advanceTimers: vi.advanceTimersByTime,
+      });
+      renderReports();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
+      });
+
+      mockListExpenses.mockClear();
+      await user.click(screen.getByRole('button', { name: /this year/i }));
+
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith(
+          expect.objectContaining({
+            startDate: '2026-01-01',
+          }),
+        );
+      });
+    });
+
+    it('sets "Last Year" date range when clicked', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date(2026, 2, 15)); // March 15, 2026
+
+      const user = userEvent.setup({
+        advanceTimers: vi.advanceTimersByTime,
+      });
+      renderReports();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
+      });
+
+      mockListExpenses.mockClear();
+      await user.click(screen.getByRole('button', { name: /last year/i }));
+
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith(
+          expect.objectContaining({
+            startDate: '2025-01-01',
+            endDate: '2025-12-31',
+          }),
+        );
+      });
+    });
+
+    it('clears date range when "All Time" is clicked', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      vi.setSystemTime(new Date(2026, 2, 15)); // March 15, 2026
+
+      const user = userEvent.setup({
+        advanceTimers: vi.advanceTimersByTime,
+      });
+      renderReports();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
+      });
+
+      // First set a date range
+      await user.click(screen.getByRole('button', { name: /this month/i }));
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith(
+          expect.objectContaining({ startDate: '2026-03-01' }),
+        );
+      });
+
+      mockListExpenses.mockClear();
+      // Then click All Time to clear
+      await user.click(screen.getByRole('button', { name: /all time/i }));
+
+      await waitFor(() => {
+        expect(mockListExpenses).toHaveBeenCalledWith({});
+      });
     });
   });
 
