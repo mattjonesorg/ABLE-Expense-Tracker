@@ -136,7 +136,7 @@ export function createCategorizeHandler(
         return jsonResponse(200, { result: null });
       }
 
-      log.info('Request completed', requestId, { statusCode: 200, category: result.category });
+      log.info('Request completed', requestId, { statusCode: 200, category: result.suggestedCategory });
       return jsonResponse(200, result);
     } catch (err: unknown) {
       const errorName = err instanceof Error ? err.name : 'UnknownError';
