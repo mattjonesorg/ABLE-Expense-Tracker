@@ -26,3 +26,8 @@ cdk.context.json
 # Deployment-specific URLs and resource IDs (per-deployment, never committed)
 # Copy deployment.env.example to deployment.env and fill in your values
 deployment.env
+
+# Playwright E2E test artifacts
+web/test-results/
+web/playwright-report/
+web/blob-report/
