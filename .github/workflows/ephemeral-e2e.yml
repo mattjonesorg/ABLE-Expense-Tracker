@@ -1,0 +1,220 @@
+name: Ephemeral PR Environment + E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: ephemeral-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  deploy-and-test:
+    runs-on: ubuntu-latest
+    environment: dev
+
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      ENV_PREFIX: PR-${{ github.event.pull_request.number }}
+
+    outputs:
+      api-url: ${{ steps.outputs.outputs.api-url }}
+      website-url: ${{ steps.outputs.outputs.website-url }}
+      user-pool-id: ${{ steps.outputs.outputs.user-pool-id }}
+      client-id: ${{ steps.outputs.outputs.client-id }}
+      table-name: ${{ steps.outputs.outputs.table-name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build infra
+        working-directory: infra
+        run: npx tsc
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: CDK deploy ephemeral stacks
+        working-directory: infra
+        run: |
+          npx cdk deploy --all --require-approval never \
+            --app "npx tsx bin/ephemeral-app.ts" \
+            -c envPrefix=${{ env.ENV_PREFIX }}
+
+      - name: Get stack outputs
+        id: outputs
+        run: |
+          PREFIX="AbleTracker-${{ env.ENV_PREFIX }}"
+
+          API_URL=$(aws cloudformation describe-stacks --stack-name "${PREFIX}-Api" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)
+          echo "api-url=$API_URL" >> "$GITHUB_OUTPUT"
+
+          WEBSITE_URL=$(aws cloudformation describe-stacks --stack-name "${PREFIX}-Hosting" \
+            --query "Stacks[0].Outputs[?OutputKey=='WebsiteUrl'].OutputValue" --output text)
+          echo "website-url=$WEBSITE_URL" >> "$GITHUB_OUTPUT"
+
+          USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name "${PREFIX}-Auth" \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolId'].OutputValue" --output text)
+          echo "user-pool-id=$USER_POOL_ID" >> "$GITHUB_OUTPUT"
+
+          CLIENT_ID=$(aws cloudformation describe-stacks --stack-name "${PREFIX}-Auth" \
+            --query "Stacks[0].Outputs[?OutputKey=='UserPoolClientId'].OutputValue" --output text)
+          echo "client-id=$CLIENT_ID" >> "$GITHUB_OUTPUT"
+
+          TABLE_NAME=$(aws cloudformation describe-stacks --stack-name "${PREFIX}-Data" \
+            --query "Stacks[0].Outputs[?OutputKey=='TableName'].OutputValue" --output text)
+          echo "table-name=$TABLE_NAME" >> "$GITHUB_OUTPUT"
+
+          BUCKET_NAME=$(aws cloudformation describe-stacks --stack-name "${PREFIX}-Hosting" \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" --output text)
+          echo "bucket-name=$BUCKET_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Build frontend
+        working-directory: web
+        env:
+          VITE_API_URL: ${{ steps.outputs.outputs.api-url }}
+          VITE_USER_POOL_ID: ${{ steps.outputs.outputs.user-pool-id }}
+          VITE_USER_POOL_CLIENT_ID: ${{ steps.outputs.outputs.client-id }}
+          VITE_AWS_REGION: ${{ vars.AWS_REGION }}
+        run: pnpm build
+
+      - name: Deploy frontend to S3
+        run: |
+          aws s3 sync web/dist/ "s3://${{ steps.outputs.outputs.bucket-name }}" --delete
+
+      - name: Seed test data
+        id: seed
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          USER_POOL_ID: ${{ steps.outputs.outputs.user-pool-id }}
+          CLIENT_ID: ${{ steps.outputs.outputs.client-id }}
+          TABLE_NAME: ${{ steps.outputs.outputs.table-name }}
+          E2E_TEST_EMAIL: e2e-test@abletracker.local
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+        run: node scripts/seed-test-data.mjs
+
+      - name: Install Playwright browsers
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright E2E tests
+        working-directory: web
+        env:
+          E2E_BASE_URL: ${{ steps.outputs.outputs.website-url }}
+          E2E_API_URL: ${{ steps.outputs.outputs.api-url }}
+          E2E_EMAIL: ${{ steps.seed.outputs.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ steps.seed.outputs.E2E_PASSWORD }}
+        run: npx playwright test --reporter=html || true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-pr-${{ env.PR_NUMBER }}
+          path: web/playwright-report/
+          retention-days: 7
+
+      - name: Post PR comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = '<!-- ephemeral-env-comment -->';
+            const prNumber = context.payload.pull_request.number;
+            const websiteUrl = '${{ steps.outputs.outputs.website-url }}';
+            const apiUrl = '${{ steps.outputs.outputs.api-url }}';
+            const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z/, ' UTC');
+
+            const body = [
+              marker,
+              `## Ephemeral Environment — PR #${prNumber}`,
+              '',
+              '| Resource | URL |',
+              '|----------|-----|',
+              `| Frontend | ${websiteUrl} |`,
+              `| API | ${apiUrl} |`,
+              '',
+              `_Last deployed: ${now}_`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c => c.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
+
+  cleanup-on-failure:
+    runs-on: ubuntu-latest
+    needs: deploy-and-test
+    if: failure()
+    environment: dev
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build infra
+        working-directory: infra
+        run: npx tsc
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: CDK destroy ephemeral stacks
+        working-directory: infra
+        run: |
+          npx cdk destroy --all --force \
+            --app "npx tsx bin/ephemeral-app.ts" \
+            -c envPrefix=PR-${{ github.event.pull_request.number }}
