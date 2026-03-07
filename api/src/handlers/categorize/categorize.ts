@@ -2,6 +2,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 import type { CategoryResult } from '../../lib/types.js';
 import type { CategorizationInput } from '../../lib/claude.js';
 import type { AuthResult } from '../../middleware/auth.js';
+import { createLogger, extractRequestId } from '../../lib/logger.js';
 
 /**
  * Dependencies injected into the categorize handler.
@@ -102,16 +103,23 @@ function parseBody(body: string | null | undefined): ParseResult {
 export function createCategorizeHandler(
   deps: CategorizeHandlerDeps,
 ): (event: APIGatewayProxyEventV2) => Promise<APIGatewayProxyResultV2> {
+  const log = createLogger('CategorizeExpense');
+
   return async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+    const requestId = extractRequestId(event as unknown as Record<string, unknown>);
+    log.info('Request started', requestId);
+
     // Step 1: Authenticate
     const authResult = await deps.authenticate(event);
     if (!authResult.success) {
+      log.warn('Authentication failed', requestId);
       return authResult.response;
     }
 
     // Step 2: Validate input
     const parsed = parseBody(event.body);
     if (!parsed.success) {
+      log.warn('Validation failed', requestId, { error: parsed.error });
       return jsonResponse(400, {
         error: parsed.error,
         code: 'VALIDATION_ERROR',
@@ -119,13 +127,22 @@ export function createCategorizeHandler(
     }
 
     // Step 3: Categorize
-    const result = await deps.categorize(parsed.input);
+    try {
+      const result = await deps.categorize(parsed.input);
 
-    // Step 4: Return result (null is a valid response — graceful degradation)
-    if (result === null) {
-      return jsonResponse(200, { result: null });
+      // Step 4: Return result (null is a valid response — graceful degradation)
+      if (result === null) {
+        log.info('Request completed — categorization returned null (graceful degradation)', requestId, { statusCode: 200 });
+        return jsonResponse(200, { result: null });
+      }
+
+      log.info('Request completed', requestId, { statusCode: 200, category: result.suggestedCategory });
+      return jsonResponse(200, result);
+    } catch (err: unknown) {
+      const errorName = err instanceof Error ? err.name : 'UnknownError';
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.error('Categorization failed', requestId, { errorName, errorMessage });
+      throw err;
     }
-
-    return jsonResponse(200, result);
   };
 }

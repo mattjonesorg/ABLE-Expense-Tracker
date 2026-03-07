@@ -1,6 +1,7 @@
 import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda';
 import type { AuthResult } from '../../middleware/auth.js';
 import { ulid } from 'ulid';
+import { createLogger, extractRequestId } from '../../lib/logger.js';
 
 /**
  * Allowed image MIME types and their corresponding file extensions.
@@ -92,11 +93,17 @@ interface UploadRequestBody {
 export function createUploadUrlHandler(
   deps: UploadHandlerDeps,
 ): (event: APIGatewayProxyEventV2) => Promise<APIGatewayProxyResultV2> {
+  const log = createLogger('RequestUploadUrl');
+
   return async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+    const requestId = extractRequestId(event as unknown as Record<string, unknown>);
+    log.info('Request started', requestId);
+
     // Step 1: Authenticate
     const authResult = await deps.authenticate(event);
 
     if (!authResult.success) {
+      log.warn('Authentication failed', requestId);
       return authResult.response;
     }
 
@@ -107,12 +114,14 @@ export function createUploadUrlHandler(
     try {
       requestBody = event.body ? (JSON.parse(event.body) as UploadRequestBody) : {};
     } catch {
+      log.warn('Invalid JSON body', requestId);
       return errorResponse(400, 'Invalid JSON in request body', 'INVALID_BODY');
     }
 
     // Step 3: Validate contentType is present
     const { contentType } = requestBody;
     if (!contentType) {
+      log.warn('Missing contentType', requestId);
       return errorResponse(
         400,
         'Missing required field: contentType',
@@ -124,6 +133,7 @@ export function createUploadUrlHandler(
     const extension = ALLOWED_CONTENT_TYPES[contentType];
     if (!extension) {
       const allowed = Object.keys(ALLOWED_CONTENT_TYPES).join(', ');
+      log.warn('Invalid content type', requestId, { contentType });
       return errorResponse(
         400,
         `Unsupported content type: ${contentType}. Allowed types: ${allowed}`,
@@ -134,6 +144,7 @@ export function createUploadUrlHandler(
     // Step 5: Validate fileSize is present
     const { fileSize } = requestBody;
     if (fileSize === undefined || fileSize === null) {
+      log.warn('Missing fileSize', requestId);
       return errorResponse(
         400,
         'Missing required field: fileSize',
@@ -143,6 +154,7 @@ export function createUploadUrlHandler(
 
     // Step 6: Validate fileSize is a positive integer
     if (typeof fileSize !== 'number' || !Number.isInteger(fileSize) || fileSize <= 0) {
+      log.warn('Invalid fileSize', requestId);
       return errorResponse(
         400,
         'fileSize must be a positive integer (bytes)',
@@ -152,6 +164,7 @@ export function createUploadUrlHandler(
 
     // Step 7: Validate fileSize does not exceed the maximum
     if (fileSize > MAX_UPLOAD_SIZE) {
+      log.warn('File too large', requestId, { fileSize });
       return errorResponse(
         400,
         `File size ${fileSize} bytes exceeds maximum of 10 MB (${MAX_UPLOAD_SIZE} bytes)`,
@@ -159,20 +172,28 @@ export function createUploadUrlHandler(
       );
     }
 
-    // Step 8: Generate scoped S3 key
-    const id = ulid();
-    const key = `receipts/${accountId}/${id}.${extension}`;
+    try {
+      // Step 8: Generate scoped S3 key
+      const id = ulid();
+      const key = `receipts/${accountId}/${id}.${extension}`;
 
-    // Step 9: Get presigned URL with ContentLength constraint
-    const uploadUrl = await deps.getSignedUrl(
-      deps.bucketName,
-      key,
-      contentType,
-      fileSize,
-      PRESIGNED_URL_TTL,
-    );
+      // Step 9: Get presigned URL with ContentLength constraint
+      const uploadUrl = await deps.getSignedUrl(
+        deps.bucketName,
+        key,
+        contentType,
+        fileSize,
+        PRESIGNED_URL_TTL,
+      );
 
-    // Step 10: Return response with maxFileSize for client reference
-    return successResponse({ uploadUrl, key, maxFileSize: MAX_UPLOAD_SIZE });
+      // Step 10: Return response with maxFileSize for client reference
+      log.info('Request completed', requestId, { statusCode: 200, contentType });
+      return successResponse({ uploadUrl, key, maxFileSize: MAX_UPLOAD_SIZE });
+    } catch (err: unknown) {
+      const errorName = err instanceof Error ? err.name : 'UnknownError';
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.error('Failed to generate presigned URL', requestId, { errorName, errorMessage });
+      throw err;
+    }
   };
 }
