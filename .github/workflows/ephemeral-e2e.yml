@@ -125,7 +125,7 @@ jobs:
           E2E_API_URL: ${{ steps.outputs.outputs.api-url }}
           E2E_EMAIL: ${{ steps.seed.outputs.E2E_EMAIL }}
           E2E_PASSWORD: ${{ steps.seed.outputs.E2E_PASSWORD }}
-        run: npx playwright test --reporter=html || true
+        run: npx playwright test --reporter=html
 
       - name: Upload Playwright report
         if: always()
