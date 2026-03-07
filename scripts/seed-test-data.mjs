@@ -39,28 +39,10 @@ function requiredEnv(name) {
 }
 
 /**
- * Make an AWS API call using Cognito Identity Provider REST API.
+ * Run an AWS CLI command and return stdout. Throws on non-zero exit.
  */
-async function cognitoApi(target, body) {
-  const endpoint = `https://cognito-idp.${AWS_REGION}.amazonaws.com/`;
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-amz-json-1.1',
-      'X-Amz-Target': `AWSCognitoIdentityProviderService.${target}`,
-    },
-    body: JSON.stringify(body),
-  });
-
-  const text = await response.text();
-  if (!response.ok) {
-    if (text.includes('UsernameExistsException')) {
-      console.log('  Test user already exists, continuing...');
-      return null;
-    }
-    throw new Error(`Cognito ${target} failed (${response.status}): ${text}`);
-  }
-  return text ? JSON.parse(text) : null;
+function awsCli(args) {
+  return execSync(`aws ${args}`, { stdio: 'pipe', encoding: 'utf-8' });
 }
 
 /**
@@ -78,26 +60,28 @@ function dynamoPutItem(item) {
   );
 }
 
-async function createTestUser() {
+function createTestUser() {
   console.log('Creating test user...');
 
-  await cognitoApi('AdminCreateUser', {
-    UserPoolId: USER_POOL_ID,
-    Username: E2E_EMAIL,
-    TemporaryPassword: E2E_PASSWORD,
-    UserAttributes: [
-      { Name: 'email', Value: E2E_EMAIL },
-      { Name: 'email_verified', Value: 'true' },
-      { Name: 'custom:role', Value: 'admin' },
-      { Name: 'custom:accountId', Value: 'ACCT-E2E-TEST' },
-    ],
-    MessageAction: 'SUPPRESS',
-  });
+  try {
+    awsCli(
+      `cognito-idp admin-create-user --user-pool-id "${USER_POOL_ID}" --username "${E2E_EMAIL}" ` +
+      `--temporary-password "${E2E_PASSWORD}" ` +
+      `--user-attributes Name=email,Value="${E2E_EMAIL}" Name=email_verified,Value=true Name=custom:role,Value=admin Name=custom:accountId,Value=ACCT-E2E-TEST ` +
+      `--message-action SUPPRESS`,
+    );
+  } catch (err) {
+    // If user already exists, continue (idempotent)
+    if (err.stderr && err.stderr.includes('UsernameExistsException')) {
+      console.log('  User already exists, continuing...');
+    } else {
+      throw err;
+    }
+  }
 
   // Set permanent password (skips the force-change state)
-  execSync(
-    `aws cognito-idp admin-set-user-password --user-pool-id "${USER_POOL_ID}" --username "${E2E_EMAIL}" --password "${E2E_PASSWORD}" --permanent`,
-    { stdio: 'pipe' },
+  awsCli(
+    `cognito-idp admin-set-user-password --user-pool-id "${USER_POOL_ID}" --username "${E2E_EMAIL}" --password "${E2E_PASSWORD}" --permanent`,
   );
 
   console.log(`  User created: ${E2E_EMAIL}`);
@@ -177,14 +161,14 @@ function writeGitHubOutput() {
   }
 }
 
-async function main() {
+function main() {
   console.log('=== Seed Test Data ===');
   console.log(`Region: ${AWS_REGION}`);
   console.log(`User Pool: ${USER_POOL_ID}`);
   console.log(`Table: ${TABLE_NAME}`);
   console.log('');
 
-  await createTestUser();
+  createTestUser();
   seedExpenses();
   writeGitHubOutput();
 
@@ -192,7 +176,9 @@ async function main() {
   console.log('Seeding complete.');
 }
 
-main().catch((err) => {
+try {
+  main();
+} catch (err) {
   console.error('Seed script failed:', err.message);
   process.exit(1);
-});
+}
