@@ -5,9 +5,9 @@ import {
   Group,
   NavLink,
   Text,
-  Title,
   Button,
   Stack,
+  Anchor,
 } from '@mantine/core';
 import { useDisclosure } from '@mantine/hooks';
 import {
@@ -60,6 +60,45 @@ export function AppLayout() {
       }}
       padding="md"
     >
+      {/* Skip to main content link for keyboard users */}
+      <Anchor
+        href="#main-content"
+        style={{
+          position: 'absolute',
+          left: '-9999px',
+          top: 'auto',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+          zIndex: 1000,
+        }}
+        onFocus={(e) => {
+          const el = e.currentTarget;
+          el.style.position = 'fixed';
+          el.style.top = '4px';
+          el.style.left = '4px';
+          el.style.width = 'auto';
+          el.style.height = 'auto';
+          el.style.overflow = 'visible';
+          el.style.padding = '8px 16px';
+          el.style.background = 'var(--mantine-color-blue-6)';
+          el.style.color = 'white';
+          el.style.borderRadius = '4px';
+          el.style.textDecoration = 'none';
+          el.style.fontWeight = '600';
+        }}
+        onBlur={(e) => {
+          const el = e.currentTarget;
+          el.style.position = 'absolute';
+          el.style.left = '-9999px';
+          el.style.width = '1px';
+          el.style.height = '1px';
+          el.style.overflow = 'hidden';
+        }}
+      >
+        Skip to main content
+      </Anchor>
+
       <AppShell.Header>
         <Group h="100%" px="md" justify="space-between">
           <Group>
@@ -70,16 +109,15 @@ export function AppLayout() {
               size="sm"
               aria-label="Toggle navigation"
             />
-            <Title order={3}>ABLE Tracker</Title>
+            <Text fw={700} size="lg">ABLE Tracker</Text>
           </Group>
           <Group>
             {user && <Text size="sm">{user.displayName}</Text>}
             <Button
               variant="subtle"
               size="compact-sm"
-              leftSection={<IconLogout size={16} />}
+              leftSection={<IconLogout size={16} aria-hidden="true" />}
               onClick={handleLogout}
-              aria-label="Logout"
             >
               Logout
             </Button>
@@ -95,7 +133,7 @@ export function AppLayout() {
               component={Link}
               to={item.to}
               label={item.label}
-              leftSection={<item.icon size={20} stroke={1.5} />}
+              leftSection={<item.icon size={20} stroke={1.5} aria-hidden="true" />}
               active={location.pathname === item.to}
               onClick={close}
             />
@@ -103,7 +141,7 @@ export function AppLayout() {
         </Stack>
       </AppShell.Navbar>
 
-      <AppShell.Main>
+      <AppShell.Main id="main-content">
         <Outlet />
       </AppShell.Main>
     </AppShell>

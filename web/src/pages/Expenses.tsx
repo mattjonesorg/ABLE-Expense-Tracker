@@ -68,20 +68,14 @@ export function Expenses() {
     setEndDate(null);
   };
 
-  const handleRowClick = (expense: Expense) => {
-    // Future: navigate to expense detail page
-    // eslint-disable-next-line no-console
-    console.log('Navigate to expense detail:', expense.expenseId);
-  };
-
   return (
     <Stack gap="lg">
       <Group justify="space-between" align="center">
-        <Title order={2}>Expenses</Title>
+        <Title order={1}>Expenses</Title>
         <Button
           component={Link}
           to="/expenses/new"
-          leftSection={<IconPlus size={16} />}
+          leftSection={<IconPlus size={16} aria-hidden="true" />}
           size="sm"
         >
           Add Expense
@@ -126,7 +120,7 @@ export function Expenses() {
           />
           <Button
             variant="subtle"
-            leftSection={<IconFilterOff size={16} />}
+            leftSection={<IconFilterOff size={16} aria-hidden="true" />}
             onClick={handleClearFilters}
           >
             Clear filters
@@ -140,7 +134,7 @@ export function Expenses() {
 
       {!isLoading && expenses.length > 0 && (
         <Paper withBorder radius="md" style={{ overflow: 'auto' }}>
-          <Table striped highlightOnHover>
+          <Table striped highlightOnHover aria-label="Expense list">
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Date</Table.Th>
@@ -155,8 +149,6 @@ export function Expenses() {
               {expenses.map((expense) => (
                 <Table.Tr
                   key={expense.expenseId}
-                  onClick={() => handleRowClick(expense)}
-                  style={{ cursor: 'pointer' }}
                 >
                   <Table.Td>{formatDate(expense.date)}</Table.Td>
                   <Table.Td>{expense.vendor}</Table.Td>
@@ -185,7 +177,7 @@ export function Expenses() {
 
 function ExpensesLoadingSkeleton() {
   return (
-    <Paper withBorder p="md" radius="md" data-testid="expenses-loading">
+    <Paper withBorder p="md" radius="md" data-testid="expenses-loading" role="status" aria-label="Loading expenses">
       <Stack gap="sm">
         <Skeleton height={20} width="100%" />
         <Skeleton height={20} width="100%" />
@@ -200,7 +192,7 @@ function ExpensesLoadingSkeleton() {
 function ExpensesEmptyState() {
   return (
     <Paper withBorder p="xl" radius="md" ta="center">
-      <IconReceipt size={48} stroke={1.5} color="gray" />
+      <IconReceipt size={48} stroke={1.5} color="gray" aria-hidden="true" />
       <Text c="dimmed" mt="md">
         No expenses yet. Add your first expense to get started.
       </Text>

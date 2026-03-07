@@ -199,10 +199,10 @@ export function ExpenseForm() {
 
   return (
     <Stack gap="lg">
-      <Title order={2}>New Expense</Title>
+      <Title order={1}>New Expense</Title>
 
       <Paper withBorder shadow="sm" p="xl" radius="md">
-        <form onSubmit={form.onSubmit(handleSubmit)}>
+        <form onSubmit={form.onSubmit(handleSubmit)} aria-label="New expense form">
           <Stack gap="md">
             <TextInput
               label="Vendor"
@@ -283,7 +283,7 @@ export function ExpenseForm() {
               />
               <Button
                 variant="light"
-                leftSection={<IconSparkles size={16} />}
+                leftSection={<IconSparkles size={16} aria-hidden="true" />}
                 onClick={handleSuggestCategory}
                 loading={isCategorizing}
               >
@@ -295,7 +295,7 @@ export function ExpenseForm() {
               label="Receipt"
               placeholder="Upload receipt (optional)"
               accept="image/*,application/pdf"
-              leftSection={<IconUpload size={16} />}
+              leftSection={<IconUpload size={16} aria-hidden="true" />}
               clearable
               {...form.getInputProps('receipt')}
             />
