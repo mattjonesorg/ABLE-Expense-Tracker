@@ -202,6 +202,7 @@ export class ApiStack extends cdk.Stack {
       | undefined;
 
     // --- Create Lambda functions and wire routes ---
+    const routeResources: cdk.CfnResource[] = [];
     for (const route of routes) {
       const environment: Record<string, string> = { ...sharedEnvironment };
 
@@ -244,11 +245,19 @@ export class ApiStack extends cdk.Stack {
         fn,
       );
 
-      this.httpApi.addRoutes({
+      const addedRoutes = this.httpApi.addRoutes({
         path: route.path,
         methods: [route.method],
         integration,
       });
+
+      // Collect the underlying CfnRoute resources so the stage can depend on them
+      for (const r of addedRoutes) {
+        const cfnRoute = r.node.defaultChild as cdk.CfnResource;
+        if (cfnRoute) {
+          routeResources.push(cfnRoute);
+        }
+      }
     }
 
     // --- API Gateway Access Logging (#48) ---
@@ -274,6 +283,11 @@ export class ApiStack extends cdk.Stack {
         'RouteSettings.POST /expenses/categorize.ThrottlingBurstLimit',
         20,
       );
+
+      // Ensure stage is created after all routes exist (RouteSettings references routes by key)
+      for (const cfnRoute of routeResources) {
+        defaultStage.addDependency(cfnRoute);
+      }
 
       defaultStage.accessLogSettings = {
         destinationArn: accessLogGroup.logGroupArn,
