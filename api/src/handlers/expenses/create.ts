@@ -3,6 +3,7 @@ import type { ExpenseRepository } from '../../lib/dynamo.js';
 import type { AuthResult } from '../../middleware/auth.js';
 import type { AbleCategory, CreateExpenseInput, ApiError } from '../../lib/types.js';
 import { ABLE_CATEGORIES } from '../../lib/types.js';
+import { createLogger, extractRequestId } from '../../lib/logger.js';
 
 /**
  * Dependencies injected into the create expense handler.
@@ -200,10 +201,16 @@ function validateBody(
  * 5. Returns 201 with the created expense
  */
 export function createCreateExpenseHandler(deps: CreateHandlerDeps) {
+  const log = createLogger('CreateExpense');
+
   return async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+    const requestId = extractRequestId(event as unknown as Record<string, unknown>);
+    log.info('Request started', requestId);
+
     // 1. Authenticate
     const authResult = await deps.authenticate(event);
     if (!authResult.success) {
+      log.warn('Authentication failed', requestId);
       return authResult.response;
     }
     const { context } = authResult;
@@ -211,12 +218,14 @@ export function createCreateExpenseHandler(deps: CreateHandlerDeps) {
     // 2. Parse the JSON body
     const body = parseBody(event);
     if (body === null) {
+      log.warn('Invalid JSON body', requestId);
       return errorResponse(400, 'Request body must be valid JSON', 'INVALID_JSON');
     }
 
     // 3. Validate fields and business rules
     const validation = validateBody(body);
     if (!validation.valid) {
+      log.warn('Validation failed', requestId, { error: validation.error });
       return errorResponse(400, validation.error, 'VALIDATION_ERROR');
     }
 
@@ -229,6 +238,7 @@ export function createCreateExpenseHandler(deps: CreateHandlerDeps) {
         !data.receiptKey.startsWith(expectedPrefix) ||
         data.receiptKey.includes('..')
       ) {
+        log.warn('Receipt key scope violation', requestId);
         return errorResponse(403, 'receiptKey must reference your own account', 'FORBIDDEN');
       }
     }
@@ -248,10 +258,18 @@ export function createCreateExpenseHandler(deps: CreateHandlerDeps) {
       paidBy: data.paidBy,
     };
 
-    // 5. Create the expense via the repository
-    const expense = await deps.repo.createExpense(input);
+    try {
+      // 5. Create the expense via the repository
+      const expense = await deps.repo.createExpense(input);
 
-    // 6. Return 201 with the created expense
-    return jsonResponse(201, expense);
+      // 6. Return 201 with the created expense
+      log.info('Request completed', requestId, { statusCode: 201, expenseId: expense.expenseId });
+      return jsonResponse(201, expense);
+    } catch (err: unknown) {
+      const errorName = err instanceof Error ? err.name : 'UnknownError';
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.error('Failed to create expense', requestId, { errorName, errorMessage });
+      throw err;
+    }
   };
 }

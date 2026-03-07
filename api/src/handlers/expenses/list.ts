@@ -3,6 +3,7 @@ import type { ExpenseRepository } from '../../lib/dynamo.js';
 import type { AuthResult } from '../../middleware/auth.js';
 import type { AbleCategory, ApiError, Expense } from '../../lib/types.js';
 import { ABLE_CATEGORIES } from '../../lib/types.js';
+import { createLogger, extractRequestId } from '../../lib/logger.js';
 
 /**
  * Dependencies injected into the list expenses handler.
@@ -50,10 +51,16 @@ function jsonResponse(statusCode: number, data: unknown): APIGatewayProxyResultV
  * 5. Returns 200 with the expenses array
  */
 export function createListExpensesHandler(deps: ListHandlerDeps) {
+  const log = createLogger('ListExpenses');
+
   return async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+    const requestId = extractRequestId(event as unknown as Record<string, unknown>);
+    log.info('Request started', requestId);
+
     // 1. Authenticate
     const authResult = await deps.authenticate(event);
     if (!authResult.success) {
+      log.warn('Authentication failed', requestId);
       return authResult.response;
     }
     const { context } = authResult;
@@ -69,16 +76,19 @@ export function createListExpensesHandler(deps: ListHandlerDeps) {
     // Validate category if provided
     if (category !== undefined) {
       if (!(ABLE_CATEGORIES as readonly string[]).includes(category)) {
+        log.warn('Invalid category filter', requestId, { category });
         return errorResponse(400, 'category must be a valid ABLE category', 'VALIDATION_ERROR');
       }
     }
 
     // Validate date formats
     if (startDate !== undefined && !DATE_REGEX.test(startDate)) {
+      log.warn('Invalid startDate format', requestId);
       return errorResponse(400, 'startDate must be in YYYY-MM-DD format', 'VALIDATION_ERROR');
     }
 
     if (endDate !== undefined && !DATE_REGEX.test(endDate)) {
+      log.warn('Invalid endDate format', requestId);
       return errorResponse(400, 'endDate must be in YYYY-MM-DD format', 'VALIDATION_ERROR');
     }
 
@@ -87,6 +97,7 @@ export function createListExpensesHandler(deps: ListHandlerDeps) {
     if (limitStr !== undefined) {
       limit = Number(limitStr);
       if (!Number.isInteger(limit) || limit <= 0) {
+        log.warn('Invalid limit', requestId, { limit: limitStr });
         return errorResponse(400, 'limit must be a positive integer', 'VALIDATION_ERROR');
       }
     }
@@ -95,42 +106,51 @@ export function createListExpensesHandler(deps: ListHandlerDeps) {
     let reimbursed: boolean | undefined;
     if (reimbursedStr !== undefined) {
       if (reimbursedStr !== 'true' && reimbursedStr !== 'false') {
+        log.warn('Invalid reimbursed filter', requestId);
         return errorResponse(400, 'reimbursed must be "true" or "false"', 'VALIDATION_ERROR');
       }
       reimbursed = reimbursedStr === 'true';
     }
 
-    // 3. Fetch expenses from the repository
-    const filters = reimbursed !== undefined ? { reimbursed } : undefined;
-    let expenses: Expense[];
-    if (category !== undefined) {
-      expenses = await deps.repo.listExpensesByCategory(
-        context.accountId,
-        category as AbleCategory,
-      );
-    } else {
-      expenses = await deps.repo.listExpenses(context.accountId, filters);
-    }
+    try {
+      // 3. Fetch expenses from the repository
+      const filters = reimbursed !== undefined ? { reimbursed } : undefined;
+      let expenses: Expense[];
+      if (category !== undefined) {
+        expenses = await deps.repo.listExpensesByCategory(
+          context.accountId,
+          category as AbleCategory,
+        );
+      } else {
+        expenses = await deps.repo.listExpenses(context.accountId, filters);
+      }
 
-    // 4. Apply client-side filters
-    if (startDate !== undefined) {
-      expenses = expenses.filter((e) => e.date >= startDate);
-    }
+      // 4. Apply client-side filters
+      if (startDate !== undefined) {
+        expenses = expenses.filter((e) => e.date >= startDate);
+      }
 
-    if (endDate !== undefined) {
-      expenses = expenses.filter((e) => e.date <= endDate);
-    }
+      if (endDate !== undefined) {
+        expenses = expenses.filter((e) => e.date <= endDate);
+      }
 
-    if (reimbursed !== undefined) {
-      expenses = expenses.filter((e) => e.reimbursed === reimbursed);
-    }
+      if (reimbursed !== undefined) {
+        expenses = expenses.filter((e) => e.reimbursed === reimbursed);
+      }
 
-    // 5. Apply limit
-    if (limit !== undefined) {
-      expenses = expenses.slice(0, limit);
-    }
+      // 5. Apply limit
+      if (limit !== undefined) {
+        expenses = expenses.slice(0, limit);
+      }
 
-    // 6. Return response
-    return jsonResponse(200, { expenses });
+      // 6. Return response
+      log.info('Request completed', requestId, { statusCode: 200, count: expenses.length });
+      return jsonResponse(200, { expenses });
+    } catch (err: unknown) {
+      const errorName = err instanceof Error ? err.name : 'UnknownError';
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.error('Failed to list expenses', requestId, { errorName, errorMessage });
+      throw err;
+    }
   };
 }

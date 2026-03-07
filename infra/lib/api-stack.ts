@@ -1,7 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import {
@@ -236,9 +238,17 @@ export class ApiStack extends cdk.Stack {
       });
     }
 
-    // --- API Gateway Throttling (#47) ---
-    // Access the underlying CfnStage of the default stage to configure throttling.
-    // The HttpApi L2 construct does not expose throttling settings directly.
+    // --- API Gateway Access Logging (#48) ---
+    // Create a CloudWatch Log Group for API Gateway access logs.
+    const accessLogGroup = new logs.LogGroup(this, 'ApiAccessLogGroup', {
+      logGroupName: `/aws/apigateway/AbleTrackerApi-access-logs`,
+      retention: logs.RetentionDays.ONE_MONTH,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // --- API Gateway Throttling (#47) + Access Logging (#48) ---
+    // Access the underlying CfnStage of the default stage to configure throttling
+    // and access logging. The HttpApi L2 construct does not expose these directly.
     const defaultStage = this.httpApi.defaultStage?.node
       .defaultChild as CfnStage;
     if (defaultStage) {
@@ -258,7 +268,64 @@ export class ApiStack extends cdk.Stack {
         'RouteSettings.POST /expenses/categorize.ThrottlingBurstLimit',
         20,
       );
+
+      // Access logging — structured JSON format for easy querying in CloudWatch Insights
+      defaultStage.accessLogSettings = {
+        destinationArn: accessLogGroup.logGroupArn,
+        format: JSON.stringify({
+          requestId: '$context.requestId',
+          ip: '$context.identity.sourceIp',
+          requestTime: '$context.requestTime',
+          httpMethod: '$context.httpMethod',
+          routeKey: '$context.routeKey',
+          status: '$context.status',
+          protocol: '$context.protocol',
+          responseLength: '$context.responseLength',
+          integrationLatency: '$context.integrationLatency',
+          responseLatency: '$context.responseLatency',
+        }),
+      };
     }
+
+    // --- CloudWatch Alarms (#48) ---
+
+    // 5xx Error Rate Alarm: fires when more than 5 server errors occur in 5 minutes
+    new cloudwatch.Alarm(this, 'Api5xxAlarm', {
+      alarmName: 'AbleTrackerApi-5xx-errors',
+      alarmDescription: 'API Gateway 5xx error rate exceeds threshold (>5 in 5 min)',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/ApiGateway',
+        metricName: '5xx',
+        dimensionsMap: {
+          ApiId: this.httpApi.apiId,
+        },
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 5,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+
+    // High Latency Alarm: fires when p99 latency on the categorize endpoint exceeds 10 seconds
+    new cloudwatch.Alarm(this, 'ApiCategorizeLatencyAlarm', {
+      alarmName: 'AbleTrackerApi-categorize-p99-latency',
+      alarmDescription: 'Categorize endpoint p99 latency exceeds 10 seconds',
+      metric: new cloudwatch.Metric({
+        namespace: 'AWS/ApiGateway',
+        metricName: 'Latency',
+        dimensionsMap: {
+          ApiId: this.httpApi.apiId,
+        },
+        statistic: 'p99',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 10_000, // 10 seconds in milliseconds
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
 
     // --- Stack Outputs ---
     new cdk.CfnOutput(this, 'ApiUrl', {
