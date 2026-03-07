@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Title,
@@ -13,11 +13,15 @@ import {
   Anchor,
   Button,
   Alert,
+  Checkbox,
+  Box,
+  VisuallyHidden,
 } from '@mantine/core';
-import { IconCash, IconPlus, IconReceipt, IconCheck } from '@tabler/icons-react';
-import { listExpenses, reimburseExpense } from '../lib/api';
+import { IconCash, IconPlus, IconReceipt, IconCheck, IconCheckbox } from '@tabler/icons-react';
+import { listExpenses, reimburseExpense, bulkReimburseExpenses } from '../lib/api';
 import { formatCents, formatDate } from '../lib/format';
 import type { Expense } from '../lib/types';
+import { BulkReimburseConfirmModal } from '../components/BulkReimburseConfirmModal';
 
 interface ReimbursementByPerson {
   paidBy: string;
@@ -52,6 +56,9 @@ export function Reimbursements() {
   const [isLoading, setIsLoading] = useState(true);
   const [reimbursingId, setReimbursingId] = useState<string | null>(null);
   const [reimburseError, setReimburseError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [modalOpen, setModalOpen] = useState(false);
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   const fetchExpenses = useCallback(async () => {
     setIsLoading(true);
@@ -92,12 +99,70 @@ export function Reimbursements() {
     [fetchExpenses],
   );
 
+  const handleToggleSelect = useCallback((expenseId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(expenseId)) {
+        next.delete(expenseId);
+      } else {
+        next.add(expenseId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAllForPerson = useCallback(
+    (paidBy: string) => {
+      const personExpenseIds = expenses
+        .filter((e) => !e.reimbursed && e.paidBy === paidBy)
+        .map((e) => e.expenseId);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        for (const id of personExpenseIds) {
+          next.add(id);
+        }
+        return next;
+      });
+    },
+    [expenses],
+  );
+
+  const handleBulkReimburse = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setBulkLoading(true);
+    setReimburseError(null);
+    try {
+      const ids = Array.from(selectedIds);
+      const firstSelected = expenses.find((e) => selectedIds.has(e.expenseId));
+      const reimbursedBy = firstSelected?.paidBy ?? 'unknown';
+      await bulkReimburseExpenses(ids, reimbursedBy);
+      setSelectedIds(new Set());
+      setModalOpen(false);
+      await fetchExpenses();
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Failed to complete bulk reimbursement.';
+      setReimburseError(message);
+      setModalOpen(false);
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [selectedIds, expenses, fetchExpenses]);
+
   const reimbursements = aggregateReimbursements(expenses);
   const totalUnreimbursed = reimbursements.reduce((sum, r) => sum + r.totalOwed, 0);
   const unreimbursedExpenses = [...expenses]
     .filter((e) => !e.reimbursed)
     .sort((a, b) => b.date.localeCompare(a.date));
   const allReimbursed = expenses.length > 0 && reimbursements.length === 0;
+
+  const selectedExpenses = useMemo(
+    () => unreimbursedExpenses.filter((e) => selectedIds.has(e.expenseId)),
+    [unreimbursedExpenses, selectedIds],
+  );
+  const selectedTotal = selectedExpenses.reduce((sum, e) => sum + e.amount, 0);
 
   return (
     <Stack gap="lg">
@@ -153,6 +218,16 @@ export function Reimbursements() {
                     {formatCents(r.totalOwed)}
                   </Text>
                 </Group>
+                <Button
+                  variant="light"
+                  size="compact-sm"
+                  mt="sm"
+                  leftSection={<IconCheckbox size={14} aria-hidden="true" />}
+                  aria-label={`Select all for ${r.paidBy}`}
+                  onClick={() => handleSelectAllForPerson(r.paidBy)}
+                >
+                  Select All
+                </Button>
               </Card>
             ))}
           </SimpleGrid>
@@ -169,6 +244,7 @@ export function Reimbursements() {
             <Table striped highlightOnHover aria-label="Unreimbursed expenses">
               <Table.Thead>
                 <Table.Tr>
+                  <Table.Th style={{ width: 40 }}><VisuallyHidden>Select</VisuallyHidden></Table.Th>
                   <Table.Th>Date</Table.Th>
                   <Table.Th>Vendor</Table.Th>
                   <Table.Th>Paid By</Table.Th>
@@ -179,6 +255,13 @@ export function Reimbursements() {
               <Table.Tbody>
                 {unreimbursedExpenses.map((expense) => (
                   <Table.Tr key={expense.expenseId}>
+                    <Table.Td>
+                      <Checkbox
+                        checked={selectedIds.has(expense.expenseId)}
+                        onChange={() => handleToggleSelect(expense.expenseId)}
+                        aria-label={`Select ${expense.vendor}`}
+                      />
+                    </Table.Td>
                     <Table.Td>{formatDate(expense.date)}</Table.Td>
                     <Table.Td>{expense.vendor}</Table.Td>
                     <Table.Td>{expense.paidBy}</Table.Td>
@@ -204,6 +287,40 @@ export function Reimbursements() {
               </Table.Tbody>
             </Table>
           </Paper>
+
+          {selectedIds.size > 0 && (
+            <Box
+              style={{
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 100,
+              }}
+            >
+              <Paper withBorder shadow="lg" p="md" radius="md">
+                <Group gap="md" justify="center">
+                  <Text fw={500}>
+                    {selectedIds.size} selected
+                  </Text>
+                  <Text fw={700}>{formatCents(selectedTotal)}</Text>
+                  <Button
+                    color="green"
+                    leftSection={<IconCheck size={16} aria-hidden="true" />}
+                    onClick={() => setModalOpen(true)}
+                  >
+                    Reimburse Selected
+                  </Button>
+                </Group>
+              </Paper>
+            </Box>
+          )}
+
+          <BulkReimburseConfirmModal
+            opened={modalOpen}
+            onClose={() => setModalOpen(false)}
+            onConfirm={() => void handleBulkReimburse()}
+            expenses={selectedExpenses}
+            loading={bulkLoading}
+          />
         </>
       )}
     </Stack>
