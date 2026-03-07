@@ -116,7 +116,7 @@ describe('ApiStack', () => {
     it('attaches authorization to all routes', () => {
       const routes = template.findResources('AWS::ApiGatewayV2::Route');
       const routeKeys = Object.keys(routes);
-      expect(routeKeys.length).toBe(7);
+      expect(routeKeys.length).toBe(8);
 
       for (const key of routeKeys) {
         expect(routes[key].Properties.AuthorizationType).toBe('JWT');
@@ -126,8 +126,8 @@ describe('ApiStack', () => {
   });
 
   describe('Lambda Functions', () => {
-    it('creates Lambda functions for all 7 endpoints', () => {
-      template.resourceCountIs('AWS::Lambda::Function', 7);
+    it('creates Lambda functions for all 8 endpoints', () => {
+      template.resourceCountIs('AWS::Lambda::Function', 8);
     });
 
     it('does not use placeholder inline code for any Lambda function (#74)', () => {
@@ -146,7 +146,7 @@ describe('ApiStack', () => {
     it('uses Node.js 20 runtime for all Lambda functions', () => {
       const functions = template.findResources('AWS::Lambda::Function');
       const functionKeys = Object.keys(functions);
-      expect(functionKeys.length).toBe(7);
+      expect(functionKeys.length).toBe(8);
 
       for (const key of functionKeys) {
         expect(functions[key].Properties.Runtime).toBe('nodejs20.x');
@@ -199,8 +199,8 @@ describe('ApiStack', () => {
   });
 
   describe('API Routes', () => {
-    it('creates routes for all 7 endpoints', () => {
-      template.resourceCountIs('AWS::ApiGatewayV2::Route', 7);
+    it('creates routes for all 8 endpoints', () => {
+      template.resourceCountIs('AWS::ApiGatewayV2::Route', 8);
     });
 
     it('creates POST /expenses route', () => {
@@ -230,6 +230,12 @@ describe('ApiStack', () => {
     it('creates PUT /expenses/{id}/reimburse route', () => {
       template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
         RouteKey: 'PUT /expenses/{id}/reimburse',
+      });
+    });
+
+    it('creates POST /expenses/reimburse-bulk route', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
+        RouteKey: 'POST /expenses/reimburse-bulk',
       });
     });
 
@@ -325,6 +331,12 @@ describe('ApiStack', () => {
 
     it('ReimburseExpense gets DynamoDB read/write access', () => {
       const stmts = getPolicyStatementsForFunction(template, 'Mark an expense as reimbursed');
+      expect(statementsHaveDynamoRead(stmts)).toBe(true);
+      expect(statementsHaveDynamoWrite(stmts)).toBe(true);
+    });
+
+    it('ReimburseBulk gets DynamoDB read/write access', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'Bulk mark expenses as reimbursed');
       expect(statementsHaveDynamoRead(stmts)).toBe(true);
       expect(statementsHaveDynamoWrite(stmts)).toBe(true);
     });

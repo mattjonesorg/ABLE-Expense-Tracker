@@ -4,6 +4,7 @@ import {
   QueryCommand,
   UpdateCommand,
   DeleteCommand,
+  TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { ulid } from 'ulid';
 import type { AbleCategory, CreateExpenseInput, Expense, ListExpensesFilters } from './types.js';
@@ -218,6 +219,48 @@ export class ExpenseRepository {
     );
 
     return itemToExpense(result.Attributes as Record<string, unknown>);
+  }
+
+  /**
+   * Mark multiple expenses as reimbursed atomically using DynamoDB transactions.
+   * Each item has a condition expression to prevent double-reimbursement.
+   * If any expense is already reimbursed, the entire transaction aborts.
+   */
+  async markReimbursedBulk(accountId: string, expenses: Expense[]): Promise<Expense[]> {
+    const now = new Date().toISOString();
+
+    const transactItems = expenses.map((expense) => ({
+      Update: {
+        TableName: this.tableName,
+        Key: {
+          PK: `ACCOUNT#${accountId}`,
+          SK: `EXP#${expense.date}#${expense.expenseId}`,
+        },
+        ConditionExpression: 'reimbursed = :false',
+        UpdateExpression: 'SET reimbursed = :reimbursed, reimbursedAt = :reimbursedAt, updatedAt = :updatedAt, #gsi2sk = :gsi2sk',
+        ExpressionAttributeNames: {
+          '#gsi2sk': 'GSI2SK',
+        },
+        ExpressionAttributeValues: {
+          ':false': false,
+          ':reimbursed': true,
+          ':reimbursedAt': now,
+          ':updatedAt': now,
+          ':gsi2sk': `PAID#${expense.paidBy}#1#${expense.date}`,
+        },
+      },
+    }));
+
+    await this.client.send(
+      new TransactWriteCommand({ TransactItems: transactItems }),
+    );
+
+    return expenses.map((expense) => ({
+      ...expense,
+      reimbursed: true,
+      reimbursedAt: now,
+      updatedAt: now,
+    }));
   }
 
   /**

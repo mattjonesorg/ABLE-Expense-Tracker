@@ -157,6 +157,14 @@ export class ApiStack extends cdk.Stack {
         dynamoAccess: 'readwrite',
       },
       {
+        id: 'ReimburseBulk',
+        method: HttpMethod.POST,
+        path: '/expenses/reimburse-bulk',
+        description: 'Bulk mark expenses as reimbursed',
+        entry: path.join(HANDLERS_DIR, 'expenses/reimburse-bulk.handler.ts'),
+        dynamoAccess: 'readwrite',
+      },
+      {
         id: 'DashboardReimbursements',
         method: HttpMethod.GET,
         path: '/dashboard/reimbursements',
