@@ -611,6 +611,42 @@ describe('createCreateExpenseHandler', () => {
       expect(result.statusCode).toBe(201);
     });
 
+    it('rejects categoryNotes longer than 1000 characters with 400 (#19 security audit)', async () => {
+      const body = makeValidBody({ categoryNotes: 'N'.repeat(1001) });
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('VALIDATION_ERROR');
+      expect(responseBody.error).toMatch(/categoryNotes/i);
+      expect(responseBody.error).toMatch(/1000/);
+      expect(mockRepo.createExpense).not.toHaveBeenCalled();
+    });
+
+    it('accepts categoryNotes exactly 1000 characters (#19 security audit)', async () => {
+      const body = makeValidBody({ categoryNotes: 'N'.repeat(1000) });
+      mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>
+        Promise.resolve(makeMockExpense(input)),
+      );
+
+      const handler = createCreateExpenseHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent(JSON.stringify(body));
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(201);
+    });
+
     it('does not apply receiptKey length limit when receiptKey is null', async () => {
       const body = makeValidBody({ receiptKey: null });
       mockRepo.createExpense.mockImplementation((input: CreateExpenseInput) =>

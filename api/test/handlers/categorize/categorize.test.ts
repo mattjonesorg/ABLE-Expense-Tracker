@@ -216,6 +216,58 @@ describe('createCategorizeHandler', () => {
     });
   });
 
+  describe('input length limits (#19 security audit)', () => {
+    it('rejects vendor exceeding 200 characters — returns 400', async () => {
+      const authenticate = vi.fn().mockResolvedValue(successfulAuth);
+      const categorize = vi.fn();
+      const handler = createCategorizeHandler({ categorize, authenticate });
+      const longVendor = 'A'.repeat(201);
+      const event = makeEvent({ body: JSON.stringify({ vendor: longVendor, description: 'Item', amount: 100 }) });
+      const response = await handler(event);
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body as string) as { error: string };
+      expect(body.error).toContain('vendor');
+      expect(body.error).toContain('200');
+      expect(categorize).not.toHaveBeenCalled();
+    });
+
+    it('accepts vendor at exactly 200 characters', async () => {
+      const authenticate = vi.fn().mockResolvedValue(successfulAuth);
+      const categorize = vi.fn().mockResolvedValue(mockCategoryResult);
+      const handler = createCategorizeHandler({ categorize, authenticate });
+      const vendor200 = 'A'.repeat(200);
+      const event = makeEvent({ body: JSON.stringify({ vendor: vendor200, description: 'Item', amount: 100 }) });
+      const response = await handler(event);
+      expect(response.statusCode).toBe(200);
+      expect(categorize).toHaveBeenCalled();
+    });
+
+    it('rejects description exceeding 1000 characters — returns 400', async () => {
+      const authenticate = vi.fn().mockResolvedValue(successfulAuth);
+      const categorize = vi.fn();
+      const handler = createCategorizeHandler({ categorize, authenticate });
+      const longDescription = 'B'.repeat(1001);
+      const event = makeEvent({ body: JSON.stringify({ vendor: 'Store', description: longDescription, amount: 100 }) });
+      const response = await handler(event);
+      expect(response.statusCode).toBe(400);
+      const body = JSON.parse(response.body as string) as { error: string };
+      expect(body.error).toContain('description');
+      expect(body.error).toContain('1000');
+      expect(categorize).not.toHaveBeenCalled();
+    });
+
+    it('accepts description at exactly 1000 characters', async () => {
+      const authenticate = vi.fn().mockResolvedValue(successfulAuth);
+      const categorize = vi.fn().mockResolvedValue(mockCategoryResult);
+      const handler = createCategorizeHandler({ categorize, authenticate });
+      const desc1000 = 'B'.repeat(1000);
+      const event = makeEvent({ body: JSON.stringify({ vendor: 'Store', description: desc1000, amount: 100 }) });
+      const response = await handler(event);
+      expect(response.statusCode).toBe(200);
+      expect(categorize).toHaveBeenCalled();
+    });
+  });
+
   describe('defense-in-depth: extractAuthContext with API Gateway authorizer (#63)', () => {
     /**
      * Build event with API Gateway JWT authorizer context for defense-in-depth tests.

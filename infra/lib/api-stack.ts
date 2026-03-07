@@ -218,9 +218,9 @@ export class ApiStack extends cdk.Stack {
       }
       // 'none' or undefined: no DynamoDB permissions granted
 
-      // Grant S3 read/write to the upload handler
+      // Grant S3 read/write to the upload handler, scoped to receipts/* prefix (#19 security audit)
       if (route.needsS3Write === true) {
-        bucket.grantReadWrite(fn);
+        bucket.grantReadWrite(fn, 'receipts/*');
       }
 
       // Create the integration and add the route
