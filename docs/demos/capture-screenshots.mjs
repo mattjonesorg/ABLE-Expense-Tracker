@@ -275,6 +275,45 @@ async function main() {
       console.log('  OK');
 
       // -------------------------------------------------------
+      // 12 — Reports page
+      // -------------------------------------------------------
+      console.log('Capturing 12-reports...');
+      const reportsNav = page.locator('a[href="/reports"]').first();
+      await reportsNav.click();
+      await page.waitForURL('**/reports', { timeout: 10000 });
+      await page.waitForTimeout(2000); // Wait for API call
+      await page.screenshot({
+        path: path.join(SCREENSHOTS_DIR, '12-reports.png'),
+        fullPage: false,
+      });
+      console.log('  OK');
+
+      // -------------------------------------------------------
+      // 13 — Expense list with reimbursement filter
+      // -------------------------------------------------------
+      console.log('Capturing 13-expense-filter...');
+      const expensesNavForFilter = page.locator('a[href="/expenses"]').first();
+      await expensesNavForFilter.click();
+      await page.waitForURL('**/expenses', { timeout: 10000 });
+      await page.waitForTimeout(1000);
+      // Select "Unreimbursed" from the Reimbursement Status dropdown
+      const reimbursementSelect = page.locator('input[aria-label="Reimbursement Status"]').first();
+      if (await reimbursementSelect.count() > 0) {
+        await reimbursementSelect.click();
+        await page.waitForTimeout(300);
+        const unreimbursedOption = page.locator('[role="option"]:has-text("Unreimbursed")').first();
+        if (await unreimbursedOption.count() > 0) {
+          await unreimbursedOption.click();
+          await page.waitForTimeout(1500); // Wait for filtered results
+        }
+      }
+      await page.screenshot({
+        path: path.join(SCREENSHOTS_DIR, '13-expense-filter.png'),
+        fullPage: false,
+      });
+      console.log('  OK');
+
+      // -------------------------------------------------------
       // 10 — Logout button
       // -------------------------------------------------------
       console.log('Capturing 10-logout...');

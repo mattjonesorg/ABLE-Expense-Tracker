@@ -1,6 +1,6 @@
 # ABLE Tracker -- Product Demo
 
-> Last updated: Sprint 4, 2026-03-04 (post-deployment)
+> Last updated: Sprint 5, 2026-03-06 (post-deployment)
 
 ## What is ABLE Tracker?
 
@@ -126,11 +126,12 @@ The app uses a sidebar navigation layout with a fixed header. On mobile, the sid
 - **Dashboard** (home icon) -- `/`
 - **Expenses** (receipt icon) -- `/expenses`
 - **Reimbursements** (cash icon) -- `/reimbursements`
+- **Reports** (chart icon) -- `/reports`
 - **New Expense** (plus icon) -- `/expenses/new`
 
 **Steps:**
 
-1. From any page, observe the sidebar on the left with four navigation links.
+1. From any page, observe the sidebar on the left with five navigation links.
 2. Click each link to navigate between pages.
 3. On the header, observe your display name and the Logout button.
 4. Click **Logout** to end your session and return to the login page.
@@ -144,7 +145,7 @@ The app uses a sidebar navigation layout with a fixed header. On mobile, the sid
 3. Tap the hamburger to open/close the sidebar as an overlay.
 
 **Verification:**
-- [ ] Four navigation links are visible: Dashboard, Expenses, Reimbursements, New Expense
+- [ ] Five navigation links are visible: Dashboard, Expenses, Reimbursements, Reports, New Expense
 - [ ] Active page is visually highlighted in the sidebar
 - [ ] Clicking a link navigates to the correct page
 - [ ] Display name appears in the header
@@ -281,21 +282,27 @@ The Expense List page shows all recorded expenses in a table format. It includes
 
 **Filters:**
 
-The filter bar at the top of the table provides three filter controls:
+![Expense list with reimbursement filter](screenshots/13-expense-filter.png)
+
+The filter bar at the top of the table provides four filter controls:
 
 1. **Category** -- Dropdown to filter by any of the 11 ABLE categories (or "All categories")
-2. **From date** -- Date picker for the start of a date range
-3. **To date** -- Date picker for the end of a date range
-4. **Clear filters** -- Button to reset all filters
+2. **Reimbursement Status** -- Dropdown to filter by "Unreimbursed", "Reimbursed", or "All" (default)
+3. **From date** -- Date picker for the start of a date range
+4. **To date** -- Date picker for the end of a date range
+5. **Clear filters** -- Button to reset all filters
+
+The Reimbursement Status filter sends the `reimbursed` query parameter to the backend API, so filtering happens server-side for accurate results.
 
 **Steps:**
 
 1. Navigate to **Expenses** from the sidebar.
 2. If expenses exist, they appear in a striped, hover-highlighted table.
 3. Use the **Category** dropdown to filter by a specific ABLE category.
-4. Use the **From date** and **To date** pickers to filter by date range.
-5. Click **"Clear filters"** to reset all filters.
-6. Click **"Add Expense"** (top right) to create a new expense.
+4. Use the **Reimbursement Status** dropdown to show only unreimbursed or reimbursed expenses.
+5. Use the **From date** and **To date** pickers to filter by date range.
+6. Click **"Clear filters"** to reset all filters.
+7. Click **"Add Expense"** (top right) to create a new expense.
 
 **Empty state:**
 
@@ -309,8 +316,10 @@ If no expenses have been recorded yet, the page shows a friendly empty state wit
 - [ ] Date is formatted as "MMM D, YYYY"
 - [ ] Reimbursed column shows colored badges (green for Yes, gray for No)
 - [ ] Category filter dropdown includes all 11 ABLE categories
+- [ ] Reimbursement Status filter shows "Unreimbursed", "Reimbursed", or "All"
+- [ ] Reimbursement Status filter queries the backend (server-side filtering)
 - [ ] Date range filter restricts displayed expenses
-- [ ] "Clear filters" resets all filter controls
+- [ ] "Clear filters" resets all filter controls including Reimbursement Status
 - [ ] Empty state shows a helpful message with a link to add an expense
 - [ ] "Add Expense" button in the header links to the form
 - [ ] Table rows are clickable (cursor changes to pointer)
@@ -321,13 +330,13 @@ If no expenses have been recorded yet, the page shows a friendly empty state wit
 
 ![Reimbursements page](screenshots/11-reimbursements.png)
 
-The Reimbursements page provides a dedicated view of who is owed money and how much. It aggregates all unreimbursed expenses by payer and shows a summary with recent expense details.
+The Reimbursements page provides a dedicated view of who is owed money and how much. It aggregates all unreimbursed expenses by payer and lets users mark expenses as reimbursed directly from the table.
 
 **Page sections:**
 
 1. **Total Unreimbursed** -- A prominent banner showing the aggregate unreimbursed amount across all payers
 2. **Per-person cards** -- Each card shows the payer's name, number of unreimbursed expenses, and total amount owed (displayed in red)
-3. **Recent Expenses table** -- The 5 most recent expenses with date, vendor, paid by, amount, and reimbursed status badge
+3. **Unreimbursed Expenses table** -- All unreimbursed expenses with date, vendor, paid by, amount, and a "Mark Reimbursed" action button
 4. **Add Expense button** -- Quick action to create a new expense from this page
 
 **Steps:**
@@ -335,13 +344,17 @@ The Reimbursements page provides a dedicated view of who is owed money and how m
 1. Navigate to **Reimbursements** from the sidebar.
 2. Observe the **Total Unreimbursed** amount at the top.
 3. Review the per-person breakdown cards showing who is owed what.
-4. Scroll down to see the **Recent Expenses** table with reimbursement status badges.
+4. Scroll down to see the **Unreimbursed Expenses** table.
+5. Click **"Mark Reimbursed"** on any expense to mark it as reimbursed.
+6. A confirmation dialog appears: "Mark [vendor] expense of [amount] paid by [name] as reimbursed?"
+7. On confirmation, the expense is marked via `PUT /expenses/{id}/reimburse` and the page refreshes.
 
 **What happens:**
 - All expenses are fetched from the API via `/expenses`.
 - The page filters out reimbursed expenses and aggregates the remaining by `paidBy` field.
 - Per-person cards are sorted by total owed (highest first).
-- The Recent Expenses table shows the 5 most recent expenses regardless of reimbursement status.
+- The Unreimbursed Expenses table shows only expenses where `reimbursed` is false (no truncation — all records shown).
+- The "Mark Reimbursed" button shows a loading spinner while the API call is in progress, and other buttons are disabled to prevent concurrent actions.
 
 **Empty states:**
 - If no expenses exist, a friendly message appears: "No expenses yet. Add your first expense to start tracking reimbursements."
@@ -351,15 +364,65 @@ The Reimbursements page provides a dedicated view of who is owed money and how m
 - [ ] Total Unreimbursed amount is displayed prominently
 - [ ] Per-person cards show payer name, expense count, and amount owed in red
 - [ ] Amount owed excludes reimbursed expenses
-- [ ] Recent Expenses table shows date, vendor, paid by, amount, and reimbursed badge
-- [ ] Reimbursed badge is green for "Yes" and gray for "No"
+- [ ] Unreimbursed Expenses table shows only unreimbursed expenses (no reimbursed rows)
+- [ ] Table shows all unreimbursed expenses without truncation
+- [ ] "Mark Reimbursed" button appears on each row with a green checkmark icon
+- [ ] Clicking "Mark Reimbursed" shows a confirmation dialog before proceeding
+- [ ] After confirming, the expense disappears from the table and totals update
+- [ ] Button shows loading state during API call; other buttons are disabled
+- [ ] Error alert appears if the reimbursement API call fails
 - [ ] "Add Expense" button links to `/expenses/new`
 - [ ] Empty state shows when no expenses exist
 - [ ] "All caught up!" state shows when all expenses are reimbursed
 
 ---
 
-### 9. Logout
+### 9. Reports
+
+![Reports page](screenshots/12-reports.png)
+
+The Reports page provides a high-level financial overview of all expenses with summary statistics and a category breakdown. It supports date range filtering to analyze expenses over specific periods.
+
+**Page sections:**
+
+1. **Date range filter** -- From/To date pickers with a "Clear filters" button
+2. **Summary cards** -- Four cards showing key metrics:
+   - **Total Expenses** -- Count of all expenses in the filtered range
+   - **Total Amount** -- Sum of all expense amounts
+   - **Total Reimbursed** -- Sum of amounts that have been reimbursed
+   - **Total Unreimbursed** -- Sum of amounts still awaiting reimbursement
+3. **By Category table** -- Breakdown of expenses by ABLE category, sorted by total amount (highest first), showing category name, count, and total
+
+**Steps:**
+
+1. Navigate to **Reports** from the sidebar.
+2. View the four summary cards for an instant financial overview.
+3. Scroll down to the **By Category** table to see spending distribution across ABLE categories.
+4. Use the **From date** and **To date** pickers to narrow the report to a specific time period.
+5. Click **"Clear filters"** to reset and view all expenses.
+
+**What happens:**
+- All expenses are fetched from the API via `/expenses` (with optional date filters).
+- Summary statistics are aggregated client-side from the full expense list.
+- The category breakdown groups expenses by their ABLE category and sorts by total amount descending.
+- Changing date filters triggers a new API call and recalculates all summaries.
+
+**Empty state:**
+- If no expenses exist (or none match the date filter), a friendly message appears: "No expenses yet. Add your first expense to start viewing reports."
+
+**Verification:**
+- [ ] Reports page displays four summary cards with correct totals
+- [ ] Total Amount = Total Reimbursed + Total Unreimbursed
+- [ ] By Category table shows all categories with expenses, sorted by total descending
+- [ ] Category count and total are accurate
+- [ ] Date range filter narrows results and updates all summaries
+- [ ] "Clear filters" resets date range and shows all expenses
+- [ ] Empty state shows when no expenses exist or match filters
+- [ ] All amounts are formatted as currency (e.g., "$187.10")
+
+---
+
+### 10. Logout
 
 ![Logout](screenshots/10-logout.png)
 
@@ -397,7 +460,7 @@ ABLE Tracker runs on a fully automated AWS infrastructure, defined entirely in C
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST   | `/expenses` | Create a new expense |
-| GET    | `/expenses` | List expenses (with optional category/date filters) |
+| GET    | `/expenses` | List expenses (with optional category/date/reimbursed filters) |
 | GET    | `/expenses/{id}` | Get a single expense by ID |
 | POST   | `/expenses/categorize` | AI categorization of an expense |
 | PUT    | `/expenses/{id}/reimburse` | Mark an expense as reimbursed |
@@ -416,6 +479,8 @@ All API endpoints require a valid Cognito JWT in the `Authorization: Bearer <tok
 - **Generic error messages** -- Auth failures return generic messages; no implementation details leaked
 - **Secret scanning** -- Pre-commit hook and CI pipeline scan for leaked secrets/credentials
 - **No PII to AI** -- Only vendor name and description are sent to the Claude API; no account numbers, SSNs, or personal data
+- **API throttling** -- API Gateway enforces rate limits: 100 requests/sec (200 burst) globally, with tighter limits on the AI categorization endpoint (10 requests/sec, 20 burst)
+- **Upload size limits** -- Presigned upload URLs enforce a 10 MB maximum file size, validated both at the handler level and embedded in the presigned URL signature
 - **Post-deploy smoke tests** -- Automated CI pipeline validates all API endpoints after every deployment
 
 ---
@@ -429,10 +494,10 @@ The following features are planned but not yet implemented:
 - **Why**: Receipts are essential for tax documentation of ABLE expenses
 - **Status**: Backend presigned URL handler exists; file input is on the form; upload wiring not yet complete
 
-### Reporting Page (Issues #35, #64)
-- **What**: Reports section with expense summaries by category, date range, and reimbursement status
-- **Why**: ABLE account holders need reports for tax documentation and financial planning
-- **Status**: Navigation link planned; page is placeholder
+### Bulk Reimbursement Workflow (Issue #109)
+- **What**: Select multiple unreimbursed expenses and reimburse them together with a running total
+- **Why**: In practice, one check covers multiple expenses — the per-expense button doesn't match the real workflow
+- **Status**: Issue created; exploring checkbox multi-select, per-person bulk action, or hybrid approach
 
 ### Export to CSV/PDF (Issue #24)
 - **What**: Export filtered expenses for tax preparation
@@ -484,7 +549,7 @@ The app is responsive (sidebar collapses on narrow screens), but has not been op
 1. Open your CloudFront URL in your browser (see `deployment.env.example` for how to find it).
 2. Log in with your credentials.
 3. Explore the Dashboard, navigate between pages, and try the Add Expense form.
-4. Test the full flow: create expenses, use AI categorization, view the expense list, and check the Reimbursements page.
+4. Test the full flow: create expenses, use AI categorization, view the expense list, check the Reimbursements page, and review Reports.
 
 ### For Developers
 
