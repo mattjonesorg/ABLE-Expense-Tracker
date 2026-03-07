@@ -1,6 +1,6 @@
 # ABLE Tracker -- Product Demo
 
-> Last updated: Sprint 6, 2026-03-07 (post-deployment)
+> Last updated: Sprint 7, 2026-03-07
 
 ## What is ABLE Tracker?
 
@@ -332,16 +332,17 @@ If no expenses have been recorded yet, the page shows a friendly empty state wit
 
 ![Reimbursements page](screenshots/11-reimbursements.png)
 
-The Reimbursements page provides a dedicated view of who is owed money and how much. It aggregates all unreimbursed expenses by payer and lets users mark expenses as reimbursed directly from the table.
+The Reimbursements page provides a dedicated view of who is owed money and how much. It aggregates all unreimbursed expenses by payer and lets users mark expenses as reimbursed -- individually or in bulk.
 
 **Page sections:**
 
 1. **Total Unreimbursed** -- A prominent banner showing the aggregate unreimbursed amount across all payers
-2. **Per-person cards** -- Each card shows the payer's name, number of unreimbursed expenses, and total amount owed (displayed in red)
-3. **Unreimbursed Expenses table** -- All unreimbursed expenses with date, vendor, paid by, amount, and a "Mark Reimbursed" action button
-4. **Add Expense button** -- Quick action to create a new expense from this page
+2. **Per-person cards** -- Each card shows the payer's name, number of unreimbursed expenses, total amount owed (displayed in red), and a **"Select All"** button to select all of that person's expenses for bulk reimbursement
+3. **Unreimbursed Expenses table** -- All unreimbursed expenses with checkboxes, date, vendor, paid by, amount, and a "Mark Reimbursed" action button
+4. **Sticky bulk action bar** -- When one or more expenses are selected, a sticky bar appears at the bottom showing the selection count, running total, and a **"Reimburse Selected"** button
+5. **Add Expense button** -- Quick action to create a new expense from this page
 
-**Steps:**
+**Steps (single reimbursement):**
 
 1. Navigate to **Reimbursements** from the sidebar.
 2. Observe the **Total Unreimbursed** amount at the top.
@@ -351,12 +352,27 @@ The Reimbursements page provides a dedicated view of who is owed money and how m
 6. A confirmation dialog appears: "Mark [vendor] expense of [amount] paid by [name] as reimbursed?"
 7. On confirmation, the expense is marked via `PUT /expenses/{id}/reimburse` and the page refreshes.
 
+**Steps (bulk reimbursement):**
+
+![Bulk reimbursement with selections](screenshots/14-bulk-reimburse.png)
+
+1. Use the **checkboxes** in the table to select individual expenses, or click **"Select All"** on a person's card to select all their expenses at once.
+2. As you select expenses, a **sticky bar** appears at the bottom showing:
+   - Number of expenses selected (e.g., "3 selected")
+   - Running total of selected amounts (e.g., "$207.50")
+   - A green **"Reimburse Selected"** button
+3. Click **"Reimburse Selected"** to open the **Bulk Reimbursement Confirmation Modal**.
+4. The modal lists all selected expenses with vendor, paid by, and amount, plus a grand total.
+5. Click **"Confirm"** to reimburse all selected expenses in a single API call (`POST /expenses/reimburse-bulk`).
+6. On success, all selected expenses are marked as reimbursed and the page refreshes.
+
 **What happens:**
 - All expenses are fetched from the API via `/expenses`.
 - The page filters out reimbursed expenses and aggregates the remaining by `paidBy` field.
 - Per-person cards are sorted by total owed (highest first).
-- The Unreimbursed Expenses table shows only expenses where `reimbursed` is false (no truncation — all records shown).
-- The "Mark Reimbursed" button shows a loading spinner while the API call is in progress, and other buttons are disabled to prevent concurrent actions.
+- The Unreimbursed Expenses table shows only expenses where `reimbursed` is false (no truncation -- all records shown).
+- Single reimbursement: The "Mark Reimbursed" button shows a loading spinner while the API call is in progress, and other buttons are disabled to prevent concurrent actions.
+- Bulk reimbursement: The confirmation modal shows a loading state on the "Confirm" button; the "Cancel" button is disabled during the API call.
 
 **Empty states:**
 - If no expenses exist, a friendly message appears: "No expenses yet. Add your first expense to start tracking reimbursements."
@@ -365,9 +381,15 @@ The Reimbursements page provides a dedicated view of who is owed money and how m
 **Verification:**
 - [ ] Total Unreimbursed amount is displayed prominently
 - [ ] Per-person cards show payer name, expense count, and amount owed in red
+- [ ] Per-person cards have a "Select All" button that selects all expenses for that person
 - [ ] Amount owed excludes reimbursed expenses
 - [ ] Unreimbursed Expenses table shows only unreimbursed expenses (no reimbursed rows)
 - [ ] Table shows all unreimbursed expenses without truncation
+- [ ] Each row has a checkbox for bulk selection
+- [ ] Selecting expenses shows a sticky bar at the bottom with count, total, and "Reimburse Selected" button
+- [ ] "Reimburse Selected" opens a confirmation modal listing all selected expenses
+- [ ] Confirmation modal shows vendor, paid by, amount for each expense and a grand total
+- [ ] Confirming bulk reimbursement marks all selected expenses and refreshes the page
 - [ ] "Mark Reimbursed" button appears on each row with a green checkmark icon
 - [ ] Clicking "Mark Reimbursed" shows a confirmation dialog before proceeding
 - [ ] After confirming, the expense disappears from the table and totals update
@@ -467,6 +489,8 @@ ABLE Tracker runs on a fully automated AWS infrastructure, defined entirely in C
 | Logging | CloudWatch Logs | Structured JSON Lambda logging with request tracing |
 | Monitoring | CloudWatch Alarms | 5xx error rate and AI categorization latency (p99) alerts |
 | E2E Testing | Playwright | End-to-end browser tests for critical paths |
+| Accessibility | axe-core | Automated WCAG 2.1 AA scanning integrated into test suite |
+| Ephemeral Envs | CDK + GitHub Actions | Per-PR isolated AWS environments with E2E testing |
 | CI/CD | GitHub Actions | Automated tests, security review, and deployment pipelines |
 
 ### API Endpoints
@@ -478,6 +502,7 @@ ABLE Tracker runs on a fully automated AWS infrastructure, defined entirely in C
 | GET    | `/expenses/{id}` | Get a single expense by ID |
 | POST   | `/expenses/categorize` | AI categorization of an expense |
 | PUT    | `/expenses/{id}/reimburse` | Mark an expense as reimbursed |
+| POST   | `/expenses/reimburse-bulk` | Bulk mark multiple expenses as reimbursed |
 | GET    | `/dashboard/reimbursements` | Reimbursement summary dashboard |
 | POST   | `/uploads/request-url` | Get a presigned S3 URL for receipt upload |
 
@@ -512,10 +537,9 @@ The following features are planned but not yet implemented:
 - **Why**: Receipts are essential for tax documentation of ABLE expenses
 - **Status**: Backend presigned URL handler exists; file input is on the form; upload wiring not yet complete
 
-### Bulk Reimbursement Workflow (Issue #109)
-- **What**: Select multiple unreimbursed expenses and reimburse them together with a running total
-- **Why**: In practice, one check covers multiple expenses — the per-expense button doesn't match the real workflow
-- **Status**: Issue created; exploring checkbox multi-select, per-person bulk action, or hybrid approach
+### ~~Bulk Reimbursement Workflow (Issue #109)~~ -- IMPLEMENTED (Sprint 7)
+
+**Status: Implemented and deployed.** The Reimbursements page now supports checkbox multi-select with per-person "Select All" buttons, a sticky action bar with running total, and a confirmation modal. Bulk reimbursement is handled via `POST /expenses/reimburse-bulk`. See Section 8 above.
 
 ### Export to CSV/PDF (Issue #24)
 - **What**: Export filtered expenses for tax preparation
@@ -588,3 +612,14 @@ Playwright E2E tests cover critical user paths (login flow). Run them locally or
 ```bash
 cd web && pnpm exec playwright test
 ```
+
+### Ephemeral PR Environments
+
+Every pull request automatically deploys an isolated AWS environment with its own Cognito user pool, DynamoDB table, API Gateway, and S3-hosted frontend. The workflow:
+
+1. CDK deploys ephemeral stacks (`AbleTracker-PR-<number>-Auth`, `-Data`, `-Api`, `-Hosting`)
+2. Frontend is built with the ephemeral environment's configuration and deployed to S3
+3. Test data is seeded (test user + sample expenses)
+4. Playwright E2E tests run against the ephemeral environment
+5. A PR comment is posted with links to the frontend and API
+6. On PR close, ephemeral stacks are automatically destroyed
