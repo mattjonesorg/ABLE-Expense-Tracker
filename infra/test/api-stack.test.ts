@@ -373,6 +373,30 @@ describe('ApiStack', () => {
       expect(hasS3).toBe(true);
     });
 
+    it('RequestUploadUrl S3 access is scoped to receipts/* prefix (#19 security audit)', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'Request a presigned URL for receipt upload');
+      const s3Statements = stmts.filter((s) => {
+        const actions = s.Action;
+        if (!Array.isArray(actions)) return false;
+        return actions.some((a: string) => typeof a === 'string' && a.startsWith('s3:'));
+      });
+      expect(s3Statements.length).toBeGreaterThan(0);
+      // Collect all S3 resources across all statements
+      const allResources: string[] = [];
+      for (const stmt of s3Statements) {
+        const resources = Array.isArray(stmt.Resource) ? stmt.Resource : [stmt.Resource];
+        for (const resource of resources) {
+          allResources.push(JSON.stringify(resource));
+        }
+      }
+      // At least one resource must be scoped to 'receipts/*' (object-level access)
+      const hasScopedResource = allResources.some((r) => r.includes('receipts/*'));
+      expect(hasScopedResource).toBe(true);
+      // No S3 resource should use wildcard on the full bucket (bucket ARN/*)
+      const hasFullWildcard = allResources.some((r) => r.includes('/*') && !r.includes('receipts/*'));
+      expect(hasFullWildcard).toBe(false);
+    });
+
     it('CreateExpense does NOT get S3 access', () => {
       const stmts = getPolicyStatementsForFunction(template, 'Create a new expense');
       const hasS3 = stmts.some((s) => {
@@ -534,6 +558,99 @@ describe('ApiStack CORS — context-based origins', () => {
       CorsConfiguration: {
         AllowOrigins: Match.arrayWith(['http://localhost:5173']),
       },
+    });
+  });
+});
+
+describe('ApiStack — API Gateway Access Logging (#48)', () => {
+  let template: Template;
+
+  beforeAll(() => {
+    const app = new cdk.App();
+    const deps = createTestDependencies(app, 'Logging');
+
+    const props: ApiStackProps = {
+      ...deps,
+    };
+
+    const stack = new ApiStack(app, 'TestApiStackLogging', props);
+    template = Template.fromStack(stack);
+  });
+
+  describe('CloudWatch Log Group for Access Logs', () => {
+    it('creates a CloudWatch Log Group for API Gateway access logs', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 30,
+      });
+    });
+
+    it('sets a log group name containing "AbleTrackerApi"', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: Match.stringLikeRegexp('AbleTrackerApi'),
+      });
+    });
+  });
+
+  describe('API Gateway Stage Access Log Settings', () => {
+    it('configures access logging on the default stage', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+        AccessLogSettings: Match.objectLike({
+          DestinationArn: Match.anyValue(),
+          Format: Match.anyValue(),
+        }),
+      });
+    });
+
+    it('uses a JSON format for access logs', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+        AccessLogSettings: Match.objectLike({
+          Format: Match.stringLikeRegexp('requestId'),
+        }),
+      });
+    });
+  });
+});
+
+describe('ApiStack — CloudWatch Alarms (#48)', () => {
+  let template: Template;
+
+  beforeAll(() => {
+    const app = new cdk.App();
+    const deps = createTestDependencies(app, 'Alarms');
+
+    const props: ApiStackProps = {
+      ...deps,
+    };
+
+    const stack = new ApiStack(app, 'TestApiStackAlarms', props);
+    template = Template.fromStack(stack);
+  });
+
+  describe('5xx Error Rate Alarm', () => {
+    it('creates a CloudWatch alarm for 5xx errors', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: '5xx',
+        Namespace: 'AWS/ApiGateway',
+        Statistic: 'Sum',
+        Period: 300,
+        EvaluationPeriods: 1,
+        Threshold: 5,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+  });
+
+  describe('High Latency Alarm', () => {
+    it('creates a CloudWatch alarm for p99 latency on the categorize endpoint', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: 'Latency',
+        Namespace: 'AWS/ApiGateway',
+        ExtendedStatistic: 'p99',
+        Period: 300,
+        EvaluationPeriods: 1,
+        Threshold: 10000,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
     });
   });
 });

@@ -2,6 +2,7 @@ import type { APIGatewayProxyEventV2, APIGatewayProxyResultV2 } from 'aws-lambda
 import type { ExpenseRepository } from '../../lib/dynamo.js';
 import type { AuthResult } from '../../middleware/auth.js';
 import type { ApiError } from '../../lib/types.js';
+import { createLogger, extractRequestId } from '../../lib/logger.js';
 
 /**
  * Dependencies injected into the reimburse expense handler.
@@ -69,10 +70,16 @@ function parseBody(event: APIGatewayProxyEventV2): Record<string, unknown> | nul
  * 6. Returns 200 with the updated expense
  */
 export function createReimburseExpenseHandler(deps: ReimburseHandlerDeps) {
+  const log = createLogger('ReimburseExpense');
+
   return async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
+    const requestId = extractRequestId(event as unknown as Record<string, unknown>);
+    log.info('Request started', requestId);
+
     // 1. Authenticate
     const authResult = await deps.authenticate(event);
     if (!authResult.success) {
+      log.warn('Authentication failed', requestId);
       return authResult.response;
     }
     const { context } = authResult;
@@ -80,45 +87,59 @@ export function createReimburseExpenseHandler(deps: ReimburseHandlerDeps) {
     // 2. Extract expense ID from path parameters
     const expenseId = event.pathParameters?.['id'];
     if (!expenseId || expenseId.trim().length === 0) {
+      log.warn('Missing expense ID', requestId);
       return errorResponse(400, 'Expense id is required', 'VALIDATION_ERROR');
     }
 
     // 3. Parse and validate request body
     const body = parseBody(event);
     if (body === null) {
+      log.warn('Invalid JSON body', requestId);
       return errorResponse(400, 'Request body must be valid JSON', 'INVALID_JSON');
     }
 
     if (typeof body['reimbursedBy'] !== 'string' || body['reimbursedBy'].trim().length === 0) {
+      log.warn('Missing reimbursedBy', requestId);
       return errorResponse(400, 'reimbursedBy is required', 'VALIDATION_ERROR');
     }
 
     const reimbursedBy = body['reimbursedBy'] as string;
 
     if (reimbursedBy.length > MAX_REIMBURSED_BY_LENGTH) {
+      log.warn('reimbursedBy too long', requestId);
       return errorResponse(400, `reimbursedBy must not exceed ${MAX_REIMBURSED_BY_LENGTH} characters`, 'VALIDATION_ERROR');
     }
 
-    // 4. Fetch expense and validate state
-    const expense = await deps.repo.getExpense(context.accountId, expenseId);
-    if (expense === null) {
-      return errorResponse(404, 'Expense not found', 'NOT_FOUND');
+    try {
+      // 4. Fetch expense and validate state
+      const expense = await deps.repo.getExpense(context.accountId, expenseId);
+      if (expense === null) {
+        log.info('Expense not found', requestId, { statusCode: 404, expenseId });
+        return errorResponse(404, 'Expense not found', 'NOT_FOUND');
+      }
+
+      if (expense.reimbursed) {
+        log.warn('Expense already reimbursed', requestId, { expenseId });
+        return errorResponse(409, 'Expense is already reimbursed', 'ALREADY_REIMBURSED');
+      }
+
+      // 5. Build the SK from the expense data and mark as reimbursed
+      const sk = `EXP#${expense.date}#${expense.expenseId}`;
+      const updated = await deps.repo.markReimbursed(
+        context.accountId,
+        expenseId,
+        sk,
+        expense.paidBy,
+      );
+
+      // 6. Return the updated expense
+      log.info('Request completed', requestId, { statusCode: 200, expenseId });
+      return jsonResponse(200, updated);
+    } catch (err: unknown) {
+      const errorName = err instanceof Error ? err.name : 'UnknownError';
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.error('Failed to reimburse expense', requestId, { errorName, errorMessage, expenseId });
+      throw err;
     }
-
-    if (expense.reimbursed) {
-      return errorResponse(409, 'Expense is already reimbursed', 'ALREADY_REIMBURSED');
-    }
-
-    // 5. Build the SK from the expense data and mark as reimbursed
-    const sk = `EXP#${expense.date}#${expense.expenseId}`;
-    const updated = await deps.repo.markReimbursed(
-      context.accountId,
-      expenseId,
-      sk,
-      expense.paidBy,
-    );
-
-    // 6. Return the updated expense
-    return jsonResponse(200, updated);
   };
 }
