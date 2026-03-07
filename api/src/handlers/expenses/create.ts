@@ -43,6 +43,7 @@ const MAX_DESCRIPTION_LENGTH = 1000;
 const MAX_CATEGORY_LENGTH = 100;
 const MAX_PAID_BY_LENGTH = 100;
 const MAX_RECEIPT_KEY_LENGTH = 500;
+const MAX_CATEGORY_NOTES_LENGTH = 1000;
 
 /** Maximum allowed amount in cents ($100,000). Prevents abuse via unrealistic values (#45). */
 const MAX_AMOUNT_CENTS = 10_000_000;
@@ -166,6 +167,11 @@ function validateBody(
   // receiptKey length limit (#41)
   if (typeof body['receiptKey'] === 'string' && body['receiptKey'].length > MAX_RECEIPT_KEY_LENGTH) {
     return { valid: false, error: `receiptKey must not exceed ${MAX_RECEIPT_KEY_LENGTH} characters` };
+  }
+
+  // categoryNotes length limit (#19 security audit)
+  if (typeof body['categoryNotes'] === 'string' && body['categoryNotes'].length > MAX_CATEGORY_NOTES_LENGTH) {
+    return { valid: false, error: `categoryNotes must not exceed ${MAX_CATEGORY_NOTES_LENGTH} characters` };
   }
 
   return {

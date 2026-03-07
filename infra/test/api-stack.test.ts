@@ -373,6 +373,30 @@ describe('ApiStack', () => {
       expect(hasS3).toBe(true);
     });
 
+    it('RequestUploadUrl S3 access is scoped to receipts/* prefix (#19 security audit)', () => {
+      const stmts = getPolicyStatementsForFunction(template, 'Request a presigned URL for receipt upload');
+      const s3Statements = stmts.filter((s) => {
+        const actions = s.Action;
+        if (!Array.isArray(actions)) return false;
+        return actions.some((a: string) => typeof a === 'string' && a.startsWith('s3:'));
+      });
+      expect(s3Statements.length).toBeGreaterThan(0);
+      // Collect all S3 resources across all statements
+      const allResources: string[] = [];
+      for (const stmt of s3Statements) {
+        const resources = Array.isArray(stmt.Resource) ? stmt.Resource : [stmt.Resource];
+        for (const resource of resources) {
+          allResources.push(JSON.stringify(resource));
+        }
+      }
+      // At least one resource must be scoped to 'receipts/*' (object-level access)
+      const hasScopedResource = allResources.some((r) => r.includes('receipts/*'));
+      expect(hasScopedResource).toBe(true);
+      // No S3 resource should use wildcard on the full bucket (bucket ARN/*)
+      const hasFullWildcard = allResources.some((r) => r.includes('/*') && !r.includes('receipts/*'));
+      expect(hasFullWildcard).toBe(false);
+    });
+
     it('CreateExpense does NOT get S3 access', () => {
       const stmts = getPolicyStatementsForFunction(template, 'Create a new expense');
       const hasS3 = stmts.some((s) => {

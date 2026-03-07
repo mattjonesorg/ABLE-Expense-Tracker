@@ -27,6 +27,12 @@ function jsonResponse(statusCode: number, body: unknown): APIGatewayProxyResultV
 /** Maximum allowed amount in cents ($100,000). Consistent with create handler (#45). */
 const MAX_AMOUNT_CENTS = 10_000_000;
 
+/** Maximum vendor length. Consistent with create handler (#19 security audit). */
+const MAX_VENDOR_LENGTH = 200;
+
+/** Maximum description length. Consistent with create handler (#19 security audit). */
+const MAX_DESCRIPTION_LENGTH = 1000;
+
 /**
  * Result of parsing the categorize request body.
  */
@@ -56,8 +62,16 @@ function parseBody(body: string | null | undefined): ParseResult {
       return { success: false, error: 'Missing required fields: vendor and description' };
     }
 
+    if ((obj['vendor'] as string).length > MAX_VENDOR_LENGTH) {
+      return { success: false, error: `vendor must not exceed ${MAX_VENDOR_LENGTH} characters` };
+    }
+
     if (typeof obj['description'] !== 'string' || obj['description'].length === 0) {
       return { success: false, error: 'Missing required fields: vendor and description' };
+    }
+
+    if ((obj['description'] as string).length > MAX_DESCRIPTION_LENGTH) {
+      return { success: false, error: `description must not exceed ${MAX_DESCRIPTION_LENGTH} characters` };
     }
 
     // Amount defaults to 0 if not provided (still valid for categorization)
