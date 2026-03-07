@@ -78,6 +78,7 @@ Agent definitions live in [`.claude/agents/`](.claude/agents/).
 
 ## Documentation
 
+- [AI-Driven Development Guide](docs/AI-DEVELOPMENT.md) -- How this project was built with AI
 - [Self-Hosting Setup Guide](docs/SETUP.md)
 - [Contributing Guide](docs/CONTRIBUTING.md)
 - [ABLE Expense Categories Reference](docs/ABLE-CATEGORIES.md)
