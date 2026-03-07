@@ -64,6 +64,7 @@ export function createListExpensesHandler(deps: ListHandlerDeps) {
     const startDate = queryParams['startDate'];
     const endDate = queryParams['endDate'];
     const limitStr = queryParams['limit'];
+    const reimbursedStr = queryParams['reimbursed'];
 
     // Validate category if provided
     if (category !== undefined) {
@@ -90,7 +91,17 @@ export function createListExpensesHandler(deps: ListHandlerDeps) {
       }
     }
 
+    // Validate reimbursed
+    let reimbursed: boolean | undefined;
+    if (reimbursedStr !== undefined) {
+      if (reimbursedStr !== 'true' && reimbursedStr !== 'false') {
+        return errorResponse(400, 'reimbursed must be "true" or "false"', 'VALIDATION_ERROR');
+      }
+      reimbursed = reimbursedStr === 'true';
+    }
+
     // 3. Fetch expenses from the repository
+    const filters = reimbursed !== undefined ? { reimbursed } : undefined;
     let expenses: Expense[];
     if (category !== undefined) {
       expenses = await deps.repo.listExpensesByCategory(
@@ -98,16 +109,20 @@ export function createListExpensesHandler(deps: ListHandlerDeps) {
         category as AbleCategory,
       );
     } else {
-      expenses = await deps.repo.listExpenses(context.accountId);
+      expenses = await deps.repo.listExpenses(context.accountId, filters);
     }
 
-    // 4. Apply date range filters (client-side filtering)
+    // 4. Apply client-side filters
     if (startDate !== undefined) {
       expenses = expenses.filter((e) => e.date >= startDate);
     }
 
     if (endDate !== undefined) {
       expenses = expenses.filter((e) => e.date <= endDate);
+    }
+
+    if (reimbursed !== undefined) {
+      expenses = expenses.filter((e) => e.reimbursed === reimbursed);
     }
 
     // 5. Apply limit

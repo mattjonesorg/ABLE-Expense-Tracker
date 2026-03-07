@@ -183,7 +183,7 @@ describe('createListExpensesHandler', () => {
       const event = makeEvent();
       await handler(event);
 
-      expect(mockRepo.listExpenses).toHaveBeenCalledWith('acct_01HXYZ');
+      expect(mockRepo.listExpenses).toHaveBeenCalledWith('acct_01HXYZ', undefined);
     });
   });
 
@@ -394,6 +394,135 @@ describe('createListExpensesHandler', () => {
     });
   });
 
+  describe('reimbursed filter', () => {
+    it('returns only reimbursed expenses when reimbursed=true', async () => {
+      const expenses = [
+        makeMockExpense({ expenseId: 'EXP_01', reimbursed: true, reimbursedAt: '2025-03-15T10:00:00.000Z' }),
+        makeMockExpense({ expenseId: 'EXP_02', reimbursed: false }),
+      ];
+
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+      mockRepo.listExpenses.mockResolvedValue(expenses);
+
+      const handler = createListExpensesHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent({ reimbursed: 'true' });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      const responseBody = JSON.parse(result.body as string) as { expenses: Expense[] };
+      expect(responseBody.expenses).toHaveLength(1);
+      expect(responseBody.expenses[0].expenseId).toBe('EXP_01');
+      expect(responseBody.expenses[0].reimbursed).toBe(true);
+    });
+
+    it('returns only unreimbursed expenses when reimbursed=false', async () => {
+      const expenses = [
+        makeMockExpense({ expenseId: 'EXP_01', reimbursed: true, reimbursedAt: '2025-03-15T10:00:00.000Z' }),
+        makeMockExpense({ expenseId: 'EXP_02', reimbursed: false }),
+        makeMockExpense({ expenseId: 'EXP_03', reimbursed: false }),
+      ];
+
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+      mockRepo.listExpenses.mockResolvedValue(expenses);
+
+      const handler = createListExpensesHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent({ reimbursed: 'false' });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      const responseBody = JSON.parse(result.body as string) as { expenses: Expense[] };
+      expect(responseBody.expenses).toHaveLength(2);
+      expect(responseBody.expenses.every((e) => e.reimbursed === false)).toBe(true);
+    });
+
+    it('returns all expenses when reimbursed param is not provided', async () => {
+      const expenses = [
+        makeMockExpense({ expenseId: 'EXP_01', reimbursed: true, reimbursedAt: '2025-03-15T10:00:00.000Z' }),
+        makeMockExpense({ expenseId: 'EXP_02', reimbursed: false }),
+      ];
+
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+      mockRepo.listExpenses.mockResolvedValue(expenses);
+
+      const handler = createListExpensesHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent();
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      const responseBody = JSON.parse(result.body as string) as { expenses: Expense[] };
+      expect(responseBody.expenses).toHaveLength(2);
+    });
+
+    it('returns 400 for invalid reimbursed value', async () => {
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+
+      const handler = createListExpensesHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent({ reimbursed: 'invalid' });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(400);
+      const responseBody = JSON.parse(result.body as string) as ApiError;
+      expect(responseBody.code).toBe('VALIDATION_ERROR');
+      expect(responseBody.error).toMatch(/reimbursed/i);
+    });
+
+    it('works in combination with category filter', async () => {
+      const expenses = [
+        makeMockExpense({ expenseId: 'EXP_01', category: 'Education', reimbursed: true, reimbursedAt: '2025-03-15T10:00:00.000Z' }),
+        makeMockExpense({ expenseId: 'EXP_02', category: 'Education', reimbursed: false }),
+      ];
+
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+      mockRepo.listExpensesByCategory.mockResolvedValue(expenses);
+
+      const handler = createListExpensesHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent({ category: 'Education', reimbursed: 'false' });
+      const result = await handler(event);
+
+      expect(result.statusCode).toBe(200);
+      expect(mockRepo.listExpensesByCategory).toHaveBeenCalledWith('acct_01HXYZ', 'Education');
+      const responseBody = JSON.parse(result.body as string) as { expenses: Expense[] };
+      expect(responseBody.expenses).toHaveLength(1);
+      expect(responseBody.expenses[0].expenseId).toBe('EXP_02');
+      expect(responseBody.expenses[0].reimbursed).toBe(false);
+    });
+
+    it('passes reimbursed filter to repo.listExpenses when no category is specified', async () => {
+      mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
+      mockRepo.listExpenses.mockResolvedValue([]);
+
+      const handler = createListExpensesHandler({
+        repo: mockRepo as unknown as ExpenseRepository,
+        authenticate: mockAuthenticate,
+      });
+
+      const event = makeEvent({ reimbursed: 'true' });
+      await handler(event);
+
+      expect(mockRepo.listExpenses).toHaveBeenCalledWith('acct_01HXYZ', { reimbursed: true });
+    });
+  });
+
   describe('response format', () => {
     it('sets content-type to application/json', async () => {
       mockAuthenticate.mockResolvedValue({ success: true, context: mockAuthContext });
@@ -487,7 +616,7 @@ describe('createListExpensesHandler', () => {
       const result = await handler(event);
 
       expect(result.statusCode).toBe(200);
-      expect(mockRepo.listExpenses).toHaveBeenCalledWith('acct_01HXYZ');
+      expect(mockRepo.listExpenses).toHaveBeenCalledWith('acct_01HXYZ', undefined);
     });
   });
 });

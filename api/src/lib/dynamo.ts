@@ -6,7 +6,7 @@ import {
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { ulid } from 'ulid';
-import type { AbleCategory, CreateExpenseInput, Expense } from './types.js';
+import type { AbleCategory, CreateExpenseInput, Expense, ListExpensesFilters } from './types.js';
 
 /** Key attributes stored on every DynamoDB item but not part of the Expense domain model. */
 const KEY_ATTRIBUTES = ['PK', 'SK', 'GSI1PK', 'GSI1SK', 'GSI2PK', 'GSI2SK'] as const;
@@ -107,16 +107,27 @@ export class ExpenseRepository {
 
   /**
    * List all expenses for an account in reverse chronological order.
+   * Optionally filters by reimbursement status using a DynamoDB FilterExpression.
    */
-  async listExpenses(accountId: string): Promise<Expense[]> {
+  async listExpenses(accountId: string, filters?: ListExpensesFilters): Promise<Expense[]> {
+    const expressionAttributeValues: Record<string, unknown> = {
+      ':pk': `ACCOUNT#${accountId}`,
+      ':skPrefix': 'EXP#',
+    };
+
+    let filterExpression: string | undefined;
+
+    if (filters?.reimbursed !== undefined) {
+      filterExpression = 'reimbursed = :reimbursed';
+      expressionAttributeValues[':reimbursed'] = filters.reimbursed;
+    }
+
     const result = await this.client.send(
       new QueryCommand({
         TableName: this.tableName,
         KeyConditionExpression: 'PK = :pk AND begins_with(SK, :skPrefix)',
-        ExpressionAttributeValues: {
-          ':pk': `ACCOUNT#${accountId}`,
-          ':skPrefix': 'EXP#',
-        },
+        ExpressionAttributeValues: expressionAttributeValues,
+        FilterExpression: filterExpression,
         ScanIndexForward: false,
       }),
     );
