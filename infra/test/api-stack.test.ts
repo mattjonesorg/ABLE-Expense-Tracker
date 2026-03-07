@@ -537,3 +537,96 @@ describe('ApiStack CORS — context-based origins', () => {
     });
   });
 });
+
+describe('ApiStack — API Gateway Access Logging (#48)', () => {
+  let template: Template;
+
+  beforeAll(() => {
+    const app = new cdk.App();
+    const deps = createTestDependencies(app, 'Logging');
+
+    const props: ApiStackProps = {
+      ...deps,
+    };
+
+    const stack = new ApiStack(app, 'TestApiStackLogging', props);
+    template = Template.fromStack(stack);
+  });
+
+  describe('CloudWatch Log Group for Access Logs', () => {
+    it('creates a CloudWatch Log Group for API Gateway access logs', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        RetentionInDays: 30,
+      });
+    });
+
+    it('sets a log group name containing "AbleTrackerApi"', () => {
+      template.hasResourceProperties('AWS::Logs::LogGroup', {
+        LogGroupName: Match.stringLikeRegexp('AbleTrackerApi'),
+      });
+    });
+  });
+
+  describe('API Gateway Stage Access Log Settings', () => {
+    it('configures access logging on the default stage', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+        AccessLogSettings: Match.objectLike({
+          DestinationArn: Match.anyValue(),
+          Format: Match.anyValue(),
+        }),
+      });
+    });
+
+    it('uses a JSON format for access logs', () => {
+      template.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+        AccessLogSettings: Match.objectLike({
+          Format: Match.stringLikeRegexp('requestId'),
+        }),
+      });
+    });
+  });
+});
+
+describe('ApiStack — CloudWatch Alarms (#48)', () => {
+  let template: Template;
+
+  beforeAll(() => {
+    const app = new cdk.App();
+    const deps = createTestDependencies(app, 'Alarms');
+
+    const props: ApiStackProps = {
+      ...deps,
+    };
+
+    const stack = new ApiStack(app, 'TestApiStackAlarms', props);
+    template = Template.fromStack(stack);
+  });
+
+  describe('5xx Error Rate Alarm', () => {
+    it('creates a CloudWatch alarm for 5xx errors', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: '5xx',
+        Namespace: 'AWS/ApiGateway',
+        Statistic: 'Sum',
+        Period: 300,
+        EvaluationPeriods: 1,
+        Threshold: 5,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+  });
+
+  describe('High Latency Alarm', () => {
+    it('creates a CloudWatch alarm for p99 latency on the categorize endpoint', () => {
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        MetricName: 'Latency',
+        Namespace: 'AWS/ApiGateway',
+        ExtendedStatistic: 'p99',
+        Period: 300,
+        EvaluationPeriods: 1,
+        Threshold: 10000,
+        ComparisonOperator: 'GreaterThanThreshold',
+      });
+    });
+  });
+});
