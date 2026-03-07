@@ -299,6 +299,7 @@ async function testRequestUploadUrl(token) {
       body: {
         fileName: 'smoke-test-receipt.png',
         contentType: 'image/png',
+        fileSize: 1024, // 1 KB test file
       },
     });
     const passed = status === 200 && body && typeof body.uploadUrl === 'string';
