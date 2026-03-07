@@ -15,6 +15,7 @@ import {
   IconReceipt,
   IconPlus,
   IconCash,
+  IconChartBar,
   IconLogout,
 } from '@tabler/icons-react';
 import { useAuth } from '../lib/auth';
@@ -29,6 +30,7 @@ const navItems: NavItem[] = [
   { label: 'Dashboard', to: '/', icon: IconHome },
   { label: 'Expenses', to: '/expenses', icon: IconReceipt },
   { label: 'Reimbursements', to: '/reimbursements', icon: IconCash },
+  { label: 'Reports', to: '/reports', icon: IconChartBar },
   { label: 'New Expense', to: '/expenses/new', icon: IconPlus },
 ];
 
