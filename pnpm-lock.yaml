@@ -149,6 +149,9 @@ importers:
       vitest:
         specifier: ^2.1.0
         version: 2.1.9(@types/node@25.3.3)(jsdom@25.0.1)(msw@2.12.10(@types/node@25.3.3)(typescript@5.9.3))
+      vitest-axe:
+        specifier: ^0.1.0
+        version: 0.1.0(vitest@2.1.9(@types/node@25.3.3)(jsdom@25.0.1)(msw@2.12.10(@types/node@25.3.3)(typescript@5.9.3)))
 
 packages:
 
@@ -1727,6 +1730,10 @@ packages:
   aws-sdk-client-mock@4.1.0:
     resolution: {integrity: sha512-h/tOYTkXEsAcV3//6C1/7U4ifSpKyJvb6auveAepqqNJl6TdZaPFEtKjBQNf8UxQdDP850knB2i/whq4zlsxJw==}
 
+  axe-core@4.11.1:
+    resolution: {integrity: sha512-BASOg+YwO2C+346x3LZOeoovTIoTrRqEsqMa6fmfAV0P+U9mFr9NsyOEpiYvFjbc64NMrSswhV50WdXzdb/Z5A==}
+    engines: {node: '>=4'}
+
   baseline-browser-mapping@2.10.0:
     resolution: {integrity: sha512-lIyg0szRfYbiy67j9KN8IyeD7q7hcmqnJ1ddWmNt19ItGpNN64mnllmxUNFIOdOm6by97jlL6wfpTTJrmnjWAA==}
     engines: {node: '>=6.0.0'}
@@ -1766,6 +1773,10 @@ packages:
   chalk@4.1.2:
     resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
     engines: {node: '>=10'}
+
+  chalk@5.6.2:
+    resolution: {integrity: sha512-7NzBL0rN6fMUW+f7A6Io4h40qQlG+xGmtMxfbnH/K7TAtt8JQWVQK+6g0UXKMeVJoyV5EkkNsErQ8pVD3bLHbA==}
+    engines: {node: ^12.17.0 || ^14.13 || >=16.0.0}
 
   check-error@2.1.3:
     resolution: {integrity: sha512-PAJdDJusoxnwm1VwW07VWwUN1sl7smmC3OKggvndJFadxxDRyFJBX/ggnu/KE4kQAB7a3Dp8f/YXC1FlUprWmA==}
@@ -2134,6 +2145,9 @@ packages:
   klona@2.0.6:
     resolution: {integrity: sha512-dhG34DXATL5hSxJbIexCft8FChFXtmskoZYnoPWjXQuebWYCNkVeV3KkGegCK9CP1oswI/vQibS2GY7Em/sJJA==}
     engines: {node: '>= 8'}
+
+  lodash-es@4.17.23:
+    resolution: {integrity: sha512-kVI48u3PZr38HdYz98UmfPnXl2DXrpdctLrFLCd3kOx1xUkOmpFPx7gCWWM5MPkL/fD8zb+Ph0QzjGFs4+hHWg==}
 
   loose-envify@1.4.0:
     resolution: {integrity: sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==}
@@ -2724,6 +2738,11 @@ packages:
         optional: true
       yaml:
         optional: true
+
+  vitest-axe@0.1.0:
+    resolution: {integrity: sha512-jvtXxeQPg8R/2ANTY8QicA5pvvdRP4F0FsVUAHANJ46YCDASie/cuhlSzu0DGcLmZvGBSBNsNuK3HqfaeknyvA==}
+    peerDependencies:
+      vitest: '>=0.16.0'
 
   vitest@2.1.9:
     resolution: {integrity: sha512-MSmPM9REYqDGBI8439mA4mWhV5sKmDlBKWIYbA3lRb2PTHACE0mgKwA8yQ2xq9vxDTuk4iPrECBAEW2aoFXY0Q==}
@@ -4650,6 +4669,8 @@ snapshots:
       sinon: 18.0.1
       tslib: 2.8.1
 
+  axe-core@4.11.1: {}
+
   baseline-browser-mapping@2.10.0: {}
 
   bowser@2.14.1: {}
@@ -4689,6 +4710,8 @@ snapshots:
     dependencies:
       ansi-styles: 4.3.0
       supports-color: 7.2.0
+
+  chalk@5.6.2: {}
 
   check-error@2.1.3: {}
 
@@ -5102,6 +5125,8 @@ snapshots:
   just-extend@6.2.0: {}
 
   klona@2.0.6: {}
+
+  lodash-es@4.17.23: {}
 
   loose-envify@1.4.0:
     dependencies:
@@ -5617,6 +5642,16 @@ snapshots:
       '@types/node': 25.3.3
       fsevents: 2.3.3
       tsx: 4.21.0
+
+  vitest-axe@0.1.0(vitest@2.1.9(@types/node@25.3.3)(jsdom@25.0.1)(msw@2.12.10(@types/node@25.3.3)(typescript@5.9.3))):
+    dependencies:
+      aria-query: 5.3.2
+      axe-core: 4.11.1
+      chalk: 5.6.2
+      dom-accessibility-api: 0.5.16
+      lodash-es: 4.17.23
+      redent: 3.0.0
+      vitest: 2.1.9(@types/node@25.3.3)(jsdom@25.0.1)(msw@2.12.10(@types/node@25.3.3)(typescript@5.9.3))
 
   vitest@2.1.9(@types/node@25.3.3)(jsdom@25.0.1)(msw@2.12.10(@types/node@25.3.3)(typescript@5.9.3)):
     dependencies:
