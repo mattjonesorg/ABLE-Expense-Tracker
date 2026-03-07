@@ -20,6 +20,7 @@ import {
   IconChartBar,
   IconFilterOff,
   IconCheck,
+  IconCalendar,
 } from '@tabler/icons-react';
 import { listExpenses, type ListExpensesFilters } from '../lib/api';
 import { formatCents } from '../lib/format';
@@ -31,12 +32,21 @@ interface CategoryBreakdown {
   totalAmount: number;
 }
 
+interface PersonBreakdown {
+  person: string;
+  expenseCount: number;
+  totalAmount: number;
+  totalReimbursed: number;
+  totalUnreimbursed: number;
+}
+
 interface ReportSummary {
   totalCount: number;
   totalAmount: number;
   totalReimbursed: number;
   totalUnreimbursed: number;
   categories: CategoryBreakdown[];
+  persons: PersonBreakdown[];
 }
 
 function aggregateReport(expenses: Expense[]): ReportSummary {
@@ -44,6 +54,7 @@ function aggregateReport(expenses: Expense[]): ReportSummary {
   let totalReimbursed = 0;
   let totalUnreimbursed = 0;
   const categoryMap = new Map<AbleCategory, CategoryBreakdown>();
+  const personMap = new Map<string, PersonBreakdown>();
 
   for (const expense of expenses) {
     totalAmount += expense.amount;
@@ -54,10 +65,11 @@ function aggregateReport(expenses: Expense[]): ReportSummary {
       totalUnreimbursed += expense.amount;
     }
 
-    const existing = categoryMap.get(expense.category);
-    if (existing) {
-      existing.expenseCount += 1;
-      existing.totalAmount += expense.amount;
+    // Category aggregation
+    const existingCat = categoryMap.get(expense.category);
+    if (existingCat) {
+      existingCat.expenseCount += 1;
+      existingCat.totalAmount += expense.amount;
     } else {
       categoryMap.set(expense.category, {
         category: expense.category,
@@ -65,9 +77,33 @@ function aggregateReport(expenses: Expense[]): ReportSummary {
         totalAmount: expense.amount,
       });
     }
+
+    // Person aggregation
+    const existingPerson = personMap.get(expense.paidBy);
+    if (existingPerson) {
+      existingPerson.expenseCount += 1;
+      existingPerson.totalAmount += expense.amount;
+      if (expense.reimbursed) {
+        existingPerson.totalReimbursed += expense.amount;
+      } else {
+        existingPerson.totalUnreimbursed += expense.amount;
+      }
+    } else {
+      personMap.set(expense.paidBy, {
+        person: expense.paidBy,
+        expenseCount: 1,
+        totalAmount: expense.amount,
+        totalReimbursed: expense.reimbursed ? expense.amount : 0,
+        totalUnreimbursed: expense.reimbursed ? 0 : expense.amount,
+      });
+    }
   }
 
   const categories = Array.from(categoryMap.values()).sort(
+    (a, b) => b.totalAmount - a.totalAmount,
+  );
+
+  const persons = Array.from(personMap.values()).sort(
     (a, b) => b.totalAmount - a.totalAmount,
   );
 
@@ -77,6 +113,7 @@ function aggregateReport(expenses: Expense[]): ReportSummary {
     totalReimbursed,
     totalUnreimbursed,
     categories,
+    persons,
   };
 }
 
@@ -122,6 +159,38 @@ export function Reports() {
     setEndDate(null);
   };
 
+  const handlePresetThisMonth = () => {
+    const now = new Date();
+    setStartDate(new Date(now.getFullYear(), now.getMonth(), 1));
+    setEndDate(null);
+  };
+
+  const handlePresetLastMonth = () => {
+    const now = new Date();
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    // Last day of last month = day 0 of current month
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    setStartDate(lastMonthStart);
+    setEndDate(lastMonthEnd);
+  };
+
+  const handlePresetThisYear = () => {
+    const now = new Date();
+    setStartDate(new Date(now.getFullYear(), 0, 1));
+    setEndDate(null);
+  };
+
+  const handlePresetLastYear = () => {
+    const now = new Date();
+    setStartDate(new Date(now.getFullYear() - 1, 0, 1));
+    setEndDate(new Date(now.getFullYear() - 1, 11, 31));
+  };
+
+  const handlePresetAllTime = () => {
+    setStartDate(null);
+    setEndDate(null);
+  };
+
   const summary = aggregateReport(expenses);
 
   return (
@@ -132,31 +201,51 @@ export function Reports() {
 
       {/* Date range filter */}
       <Paper withBorder p="md" radius="md">
-        <Group gap="md" align="end" wrap="wrap">
-          <DateInput
-            label="From date"
-            placeholder="Start date"
-            value={startDate}
-            onChange={setStartDate}
-            clearable
-            w={180}
-          />
-          <DateInput
-            label="To date"
-            placeholder="End date"
-            value={endDate}
-            onChange={setEndDate}
-            clearable
-            w={180}
-          />
-          <Button
-            variant="subtle"
-            leftSection={<IconFilterOff size={16} />}
-            onClick={handleClearFilters}
-          >
-            Clear filters
-          </Button>
-        </Group>
+        <Stack gap="md">
+          <Group gap="md" align="end" wrap="wrap">
+            <DateInput
+              label="From date"
+              placeholder="Start date"
+              value={startDate}
+              onChange={setStartDate}
+              clearable
+              w={180}
+            />
+            <DateInput
+              label="To date"
+              placeholder="End date"
+              value={endDate}
+              onChange={setEndDate}
+              clearable
+              w={180}
+            />
+            <Button
+              variant="subtle"
+              leftSection={<IconFilterOff size={16} />}
+              onClick={handleClearFilters}
+            >
+              Clear filters
+            </Button>
+          </Group>
+          <Group gap="xs" wrap="wrap">
+            <IconCalendar size={16} stroke={1.5} />
+            <Button variant="light" size="xs" onClick={handlePresetThisMonth}>
+              This Month
+            </Button>
+            <Button variant="light" size="xs" onClick={handlePresetLastMonth}>
+              Last Month
+            </Button>
+            <Button variant="light" size="xs" onClick={handlePresetThisYear}>
+              This Year
+            </Button>
+            <Button variant="light" size="xs" onClick={handlePresetLastYear}>
+              Last Year
+            </Button>
+            <Button variant="light" size="xs" onClick={handlePresetAllTime}>
+              All Time
+            </Button>
+          </Group>
+        </Stack>
       </Paper>
 
       {isLoading && <ReportsLoadingSkeleton />}
@@ -226,7 +315,7 @@ export function Reports() {
 
           {/* Category breakdown */}
           <Title order={3}>By Category</Title>
-          <Paper withBorder radius="md" style={{ overflow: 'auto' }}>
+          <Paper withBorder radius="md" style={{ overflow: 'auto' }} data-testid="category-table">
             <Table striped highlightOnHover>
               <Table.Thead>
                 <Table.Tr>
@@ -244,6 +333,41 @@ export function Reports() {
                     </Table.Td>
                     <Table.Td style={{ textAlign: 'right' }}>
                       {formatCents(cat.totalAmount)}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Paper>
+
+          {/* Person breakdown */}
+          <Title order={3}>By Person</Title>
+          <Paper withBorder radius="md" style={{ overflow: 'auto' }} data-testid="person-table">
+            <Table striped highlightOnHover>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Person</Table.Th>
+                  <Table.Th style={{ textAlign: 'right' }}>Count</Table.Th>
+                  <Table.Th style={{ textAlign: 'right' }}>Total Amount</Table.Th>
+                  <Table.Th style={{ textAlign: 'right' }}>Reimbursed</Table.Th>
+                  <Table.Th style={{ textAlign: 'right' }}>Unreimbursed</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {summary.persons.map((p) => (
+                  <Table.Tr key={p.person}>
+                    <Table.Td>{p.person}</Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>
+                      {p.expenseCount}
+                    </Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>
+                      {formatCents(p.totalAmount)}
+                    </Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>
+                      {formatCents(p.totalReimbursed)}
+                    </Table.Td>
+                    <Table.Td style={{ textAlign: 'right' }}>
+                      {formatCents(p.totalUnreimbursed)}
                     </Table.Td>
                   </Table.Tr>
                 ))}
