@@ -45,6 +45,8 @@ export interface ApiStackProps extends cdk.StackProps {
    * Can also be set via CDK context key "allowedOrigins" as a comma-separated string.
    */
   readonly allowedOrigins?: readonly string[];
+  /** Environment prefix for ephemeral deployments (e.g. "PR-42"). */
+  readonly envPrefix?: string;
 }
 
 /**
@@ -82,7 +84,10 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const { userPool, userPoolClient, table, bucket } = props;
+    const { userPool, userPoolClient, table, bucket, envPrefix } = props;
+
+    const apiNameSuffix = envPrefix ? `-${envPrefix}` : '';
+    const apiName = `AbleTrackerApi${apiNameSuffix}`;
 
     // --- Resolve CORS allowed origins ---
     const corsOrigins = this.resolveAllowedOrigins(props.allowedOrigins);
@@ -98,7 +103,7 @@ export class ApiStack extends cdk.Stack {
 
     // --- HTTP API ---
     this.httpApi = new HttpApi(this, 'AbleTrackerApi', {
-      apiName: 'AbleTrackerApi',
+      apiName,
       corsPreflight: {
         allowMethods: [
           CorsHttpMethod.GET,
@@ -239,27 +244,20 @@ export class ApiStack extends cdk.Stack {
     }
 
     // --- API Gateway Access Logging (#48) ---
-    // Create a CloudWatch Log Group for API Gateway access logs.
     const accessLogGroup = new logs.LogGroup(this, 'ApiAccessLogGroup', {
-      logGroupName: `/aws/apigateway/AbleTrackerApi-access-logs`,
+      logGroupName: `/aws/apigateway/${apiName}-access-logs`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // --- API Gateway Throttling (#47) + Access Logging (#48) ---
-    // Access the underlying CfnStage of the default stage to configure throttling
-    // and access logging. The HttpApi L2 construct does not expose these directly.
     const defaultStage = this.httpApi.defaultStage?.node
       .defaultChild as CfnStage;
     if (defaultStage) {
-      // Default route throttling: 100 req/s rate, 200 burst
       defaultStage.defaultRouteSettings = {
         throttlingRateLimit: 100,
         throttlingBurstLimit: 200,
       };
-      // Stricter throttling for the expensive AI categorization endpoint.
-      // Use addPropertyOverride because CfnStage.routeSettings does not
-      // auto-capitalise nested property names into CloudFormation PascalCase.
       defaultStage.addPropertyOverride(
         'RouteSettings.POST /expenses/categorize.ThrottlingRateLimit',
         10,
@@ -269,7 +267,6 @@ export class ApiStack extends cdk.Stack {
         20,
       );
 
-      // Access logging — structured JSON format for easy querying in CloudWatch Insights
       defaultStage.accessLogSettings = {
         destinationArn: accessLogGroup.logGroupArn,
         format: JSON.stringify({
@@ -288,10 +285,8 @@ export class ApiStack extends cdk.Stack {
     }
 
     // --- CloudWatch Alarms (#48) ---
-
-    // 5xx Error Rate Alarm: fires when more than 5 server errors occur in 5 minutes
     new cloudwatch.Alarm(this, 'Api5xxAlarm', {
-      alarmName: 'AbleTrackerApi-5xx-errors',
+      alarmName: `${apiName}-5xx-errors`,
       alarmDescription: 'API Gateway 5xx error rate exceeds threshold (>5 in 5 min)',
       metric: new cloudwatch.Metric({
         namespace: 'AWS/ApiGateway',
@@ -308,9 +303,8 @@ export class ApiStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    // High Latency Alarm: fires when p99 latency on the categorize endpoint exceeds 10 seconds
     new cloudwatch.Alarm(this, 'ApiCategorizeLatencyAlarm', {
-      alarmName: 'AbleTrackerApi-categorize-p99-latency',
+      alarmName: `${apiName}-categorize-p99-latency`,
       alarmDescription: 'Categorize endpoint p99 latency exceeds 10 seconds',
       metric: new cloudwatch.Metric({
         namespace: 'AWS/ApiGateway',
@@ -321,7 +315,7 @@ export class ApiStack extends cdk.Stack {
         statistic: 'p99',
         period: cdk.Duration.minutes(5),
       }),
-      threshold: 10_000, // 10 seconds in milliseconds
+      threshold: 10_000,
       evaluationPeriods: 1,
       comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
@@ -334,23 +328,11 @@ export class ApiStack extends cdk.Stack {
     });
   }
 
-  /**
-   * Builds the list of allowed CORS origins from props and CDK context.
-   *
-   * Resolution order:
-   * 1. Origins passed via `allowedOrigins` prop (explicit, highest priority)
-   * 2. Origins from CDK context key "allowedOrigins" (comma-separated string)
-   * 3. Local dev origin is always appended if not already present
-   *
-   * @param propsOrigins - Origins from stack props, if any
-   * @returns Deduplicated array of allowed origin URLs
-   */
   private resolveAllowedOrigins(
     propsOrigins: readonly string[] | undefined,
   ): string[] {
     const origins = new Set<string>();
 
-    // 1. Add origins from props
     if (propsOrigins) {
       for (const origin of propsOrigins) {
         const trimmed = origin.trim();
@@ -360,7 +342,6 @@ export class ApiStack extends cdk.Stack {
       }
     }
 
-    // 2. Add origins from CDK context (comma-separated string)
     const contextValue = this.node.tryGetContext('allowedOrigins') as
       | string
       | undefined;
@@ -373,7 +354,6 @@ export class ApiStack extends cdk.Stack {
       }
     }
 
-    // 3. Always include local dev origin
     origins.add(LOCAL_DEV_ORIGIN);
 
     return [...origins];
