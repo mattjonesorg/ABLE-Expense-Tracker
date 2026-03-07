@@ -94,8 +94,8 @@ jobs:
         working-directory: web
         env:
           VITE_API_URL: ${{ steps.outputs.outputs.api-url }}
-          VITE_USER_POOL_ID: ${{ steps.outputs.outputs.user-pool-id }}
-          VITE_USER_POOL_CLIENT_ID: ${{ steps.outputs.outputs.client-id }}
+          VITE_COGNITO_USER_POOL_ID: ${{ steps.outputs.outputs.user-pool-id }}
+          VITE_COGNITO_CLIENT_ID: ${{ steps.outputs.outputs.client-id }}
           VITE_AWS_REGION: ${{ vars.AWS_REGION }}
         run: pnpm build
 
