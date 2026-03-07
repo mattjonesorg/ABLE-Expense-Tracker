@@ -1,0 +1,51 @@
+name: Ephemeral TTL Cleanup
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  cleanup-stale:
+    runs-on: ubuntu-latest
+    environment: dev
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Find and destroy stale ephemeral stacks
+        run: |
+          echo "Looking for stale ephemeral stacks (older than 24h)..."
+          CUTOFF=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%S 2>/dev/null || date -u -v-24H +%Y-%m-%dT%H:%M:%S)
+
+          STACKS=$(aws cloudformation list-stacks \
+            --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE \
+            --query "StackSummaries[?starts_with(StackName, 'AbleTracker-PR-') && CreationTime < '${CUTOFF}'].StackName" \
+            --output text)
+
+          if [ -z "$STACKS" ] || [ "$STACKS" = "None" ]; then
+            echo "No stale ephemeral stacks found."
+            exit 0
+          fi
+
+          # Group stacks by PR number and delete each group
+          PR_NUMBERS=$(echo "$STACKS" | tr '\t' '\n' | sed -n 's/AbleTracker-PR-\([0-9]*\)-.*/\1/p' | sort -u)
+
+          for PR in $PR_NUMBERS; do
+            echo "Destroying stale stacks for PR-${PR}..."
+            for STACK_NAME in $(echo "$STACKS" | tr '\t' '\n' | grep "AbleTracker-PR-${PR}-"); do
+              echo "  Deleting stack: $STACK_NAME"
+              aws cloudformation delete-stack --stack-name "$STACK_NAME"
+              aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || echo "  Warning: wait timed out for $STACK_NAME"
+            done
+          done
+
+          echo "Cleanup complete."
