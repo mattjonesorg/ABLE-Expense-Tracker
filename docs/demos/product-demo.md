@@ -1,6 +1,6 @@
 # ABLE Tracker -- Product Demo
 
-> Last updated: Sprint 5, 2026-03-06 (post-deployment)
+> Last updated: Sprint 6, 2026-03-07 (post-deployment)
 
 ## What is ABLE Tracker?
 
@@ -119,6 +119,7 @@ The Dashboard is the landing page after login. It greets the user by name, provi
 The app uses a sidebar navigation layout with a fixed header. On mobile, the sidebar collapses behind a hamburger menu.
 
 **Header (always visible):**
+- **Skip to content** link (visible on keyboard focus) -- jumps directly to the main content area
 - "ABLE Tracker" title on the left
 - User's display name and a **Logout** button on the right
 
@@ -152,6 +153,7 @@ The app uses a sidebar navigation layout with a fixed header. On mobile, the sid
 - [ ] Logout button ends the session and redirects to login
 - [ ] On mobile, sidebar collapses behind a hamburger menu
 - [ ] Navigation is fully keyboard accessible (Tab, Enter)
+- [ ] Skip-to-content link is visible on keyboard focus and jumps to `#main-content`
 
 ---
 
@@ -381,30 +383,36 @@ The Reimbursements page provides a dedicated view of who is owed money and how m
 
 ![Reports page](screenshots/12-reports.png)
 
-The Reports page provides a high-level financial overview of all expenses with summary statistics and a category breakdown. It supports date range filtering to analyze expenses over specific periods.
+The Reports page provides a high-level financial overview of all expenses with summary statistics, category breakdown, and per-person spending analysis. It supports date range filtering with quick presets to analyze expenses over specific periods.
 
 **Page sections:**
 
-1. **Date range filter** -- From/To date pickers with a "Clear filters" button
-2. **Summary cards** -- Four cards showing key metrics:
+1. **Date range filter** -- From/To date pickers with a "Clear filters" button and quick preset buttons
+2. **Quick date presets** -- One-click buttons for common ranges: "This Month", "Last Month", "This Year", "Last Year", "All Time"
+3. **Summary cards** -- Four cards showing key metrics:
    - **Total Expenses** -- Count of all expenses in the filtered range
    - **Total Amount** -- Sum of all expense amounts
    - **Total Reimbursed** -- Sum of amounts that have been reimbursed
    - **Total Unreimbursed** -- Sum of amounts still awaiting reimbursement
-3. **By Category table** -- Breakdown of expenses by ABLE category, sorted by total amount (highest first), showing category name, count, and total
+4. **By Category table** -- Breakdown of expenses by ABLE category, sorted by total amount (highest first), showing category name, count, and total
+5. **By Person table** -- Breakdown of expenses by payer, sorted by total amount (highest first), showing person name, count, total amount, reimbursed amount, and unreimbursed amount
 
 **Steps:**
 
 1. Navigate to **Reports** from the sidebar.
 2. View the four summary cards for an instant financial overview.
 3. Scroll down to the **By Category** table to see spending distribution across ABLE categories.
-4. Use the **From date** and **To date** pickers to narrow the report to a specific time period.
-5. Click **"Clear filters"** to reset and view all expenses.
+4. Continue to the **By Person** table to see spending and reimbursement status per payer.
+5. Use the **quick preset buttons** (This Month, Last Month, This Year, Last Year, All Time) for common date ranges.
+6. Or use the **From date** and **To date** pickers to set a custom date range.
+7. Click **"Clear filters"** to reset and view all expenses.
 
 **What happens:**
 - All expenses are fetched from the API via `/expenses` (with optional date filters).
 - Summary statistics are aggregated client-side from the full expense list.
 - The category breakdown groups expenses by their ABLE category and sorts by total amount descending.
+- The person breakdown groups expenses by `paidBy` field, showing total, reimbursed, and unreimbursed amounts for each payer.
+- Clicking a date preset automatically sets the From/To dates and triggers a refresh.
 - Changing date filters triggers a new API call and recalculates all summaries.
 
 **Empty state:**
@@ -415,7 +423,10 @@ The Reports page provides a high-level financial overview of all expenses with s
 - [ ] Total Amount = Total Reimbursed + Total Unreimbursed
 - [ ] By Category table shows all categories with expenses, sorted by total descending
 - [ ] Category count and total are accurate
-- [ ] Date range filter narrows results and updates all summaries
+- [ ] By Person table shows all payers with count, total, reimbursed, and unreimbursed columns
+- [ ] Per-person reimbursed + unreimbursed = total for each row
+- [ ] Date range quick presets (This Month, Last Month, This Year, Last Year, All Time) set correct dates
+- [ ] Custom date range filter narrows results and updates all summaries
 - [ ] "Clear filters" resets date range and shows all expenses
 - [ ] Empty state shows when no expenses exist or match filters
 - [ ] All amounts are formatted as currency (e.g., "$187.10")
@@ -453,6 +464,9 @@ ABLE Tracker runs on a fully automated AWS infrastructure, defined entirely in C
 | Database | DynamoDB (single-table) | Expense storage with GSI for category and paidBy queries |
 | Storage | S3 (private) | Receipt file storage via presigned upload URLs |
 | AI | Claude API (Sonnet) | Expense categorization into 11 ABLE categories |
+| Logging | CloudWatch Logs | Structured JSON Lambda logging with request tracing |
+| Monitoring | CloudWatch Alarms | 5xx error rate and AI categorization latency (p99) alerts |
+| E2E Testing | Playwright | End-to-end browser tests for critical paths |
 | CI/CD | GitHub Actions | Automated tests, security review, and deployment pipelines |
 
 ### API Endpoints
@@ -473,15 +487,19 @@ All API endpoints require a valid Cognito JWT in the `Authorization: Bearer <tok
 
 - **API Gateway JWT authorizer** -- All routes require Cognito JWT validation before reaching Lambda
 - **Lambda-level auth validation** -- Defense-in-depth; handlers verify auth context independently
-- **Least-privilege IAM** -- Lambda roles use fine-grained DynamoDB permissions (specific actions on specific table/index ARNs) instead of broad wildcards
+- **Least-privilege IAM** -- Lambda roles use fine-grained DynamoDB permissions (specific actions on specific table/index ARNs) instead of broad wildcards; S3 access scoped to `receipts/*` prefix
 - **CORS restriction** -- API only accepts requests from the deployed frontend domain and localhost
-- **Input validation** -- String length limits (vendor 200, description 1000, paidBy 100), amount validation (>0, max $1M), receipt key scoping
+- **Input validation** -- String length limits (vendor 200, description 1000, paidBy 100, categoryNotes 500), amount validation (>0, max $1M), receipt key scoping; AI categorization endpoint enforces separate input length limits
 - **Generic error messages** -- Auth failures return generic messages; no implementation details leaked
 - **Secret scanning** -- Pre-commit hook and CI pipeline scan for leaked secrets/credentials
 - **No PII to AI** -- Only vendor name and description are sent to the Claude API; no account numbers, SSNs, or personal data
 - **API throttling** -- API Gateway enforces rate limits: 100 requests/sec (200 burst) globally, with tighter limits on the AI categorization endpoint (10 requests/sec, 20 burst)
 - **Upload size limits** -- Presigned upload URLs enforce a 10 MB maximum file size, validated both at the handler level and embedded in the presigned URL signature
+- **Structured logging** -- All Lambda handlers emit structured JSON logs with request IDs, handler names, timestamps, and metadata for traceability
+- **CloudWatch monitoring** -- Alarms on 5xx error rate (>5 errors in 5 minutes) and AI categorization latency (p99 >10 seconds)
 - **Post-deploy smoke tests** -- Automated CI pipeline validates all API endpoints after every deployment
+- **Accessibility (WCAG 2.1 AA)** -- Skip-to-content link, proper heading hierarchy, ARIA labels and live regions, keyboard navigation; full audit in `docs/ACCESSIBILITY.md`
+- **Security audit** -- Comprehensive security review documented in `docs/SECURITY.md`
 
 ---
 
@@ -535,6 +553,10 @@ Clicking a table row in the expense list logs the expense ID to the console but 
 
 The app is responsive (sidebar collapses on narrow screens), but has not been optimized specifically for mobile touch targets, swipe gestures, or native-app-like interactions.
 
+### Dashboard Reimbursements Endpoint
+
+The `/dashboard/reimbursements` endpoint returns 501 (stub). The Dashboard shows "Failed to load dashboard data" for the reimbursements section. Per-person reimbursement data is available on the Reimbursements and Reports pages instead.
+
 ---
 
 ## How to Run This Demo
@@ -554,3 +576,15 @@ The app is responsive (sidebar collapses on narrow screens), but has not been op
 ### For Developers
 
 See `docs/SETUP.md` for self-hosting instructions and `docs/CONTRIBUTING.md` for contribution guidelines. The full infrastructure can be deployed to your own AWS account using CDK.
+
+Additional documentation:
+- `docs/SECURITY.md` -- Security audit findings and mitigations
+- `docs/ACCESSIBILITY.md` -- WCAG 2.1 AA compliance audit
+
+### End-to-End Tests
+
+Playwright E2E tests cover critical user paths (login flow). Run them locally or via GitHub Actions:
+
+```bash
+cd web && pnpm exec playwright test
+```
