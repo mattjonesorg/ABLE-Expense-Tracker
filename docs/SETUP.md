@@ -91,6 +91,41 @@ After deployment completes, note the stack outputs:
 4. Enter the user's email and set a temporary password
 5. The user will be prompted to set a new password on first login
 
+## GitHub Secrets for CI/CD
+
+GitHub Actions workflows require secrets configured in your repository. Go to **Settings > Environments > dev > Environment secrets** to set them.
+
+### Required for All Deployments
+
+| Secret | Description |
+|--------|-------------|
+| `AWS_DEPLOY_ROLE_ARN` | IAM role ARN for OIDC-based AWS authentication (e.g., `arn:aws:iam::123456789012:role/GitHubActionsDeployRole`) |
+
+### Required for E2E / Ephemeral Environments
+
+| Secret | Description |
+|--------|-------------|
+| `E2E_TEST_PASSWORD` | Password for the E2E test user created in Cognito during ephemeral deploys |
+
+### Required for Smoke Tests
+
+| Secret | Description |
+|--------|-------------|
+| `SMOKE_TEST_EMAIL` | Email of an existing Cognito user for smoke tests |
+| `SMOKE_TEST_PASSWORD` | Password for the smoke test user |
+
+### Required for Security Review
+
+| Secret | Description |
+|--------|-------------|
+| `ANTHROPIC_API_KEY` | API key for Claude-powered automated security review on PRs |
+
+### Repository Variables (Settings > Environments > dev > Variables)
+
+| Variable | Description |
+|----------|-------------|
+| `AWS_REGION` | AWS region for deployments (e.g., `us-east-1`) |
+
 ## Teardown
 
 To remove all deployed resources:
