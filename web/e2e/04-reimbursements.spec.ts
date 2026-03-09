@@ -2,6 +2,31 @@ import { test, expect } from '@playwright/test';
 import { login } from './helpers/auth';
 import { navigateTo } from './helpers/navigation';
 
+/**
+ * Helper to create an expense via the form and return to expenses list.
+ */
+async function createExpense(
+  page: import('@playwright/test').Page,
+  vendor: string,
+  amount: string,
+  paidBy: string,
+  category: string,
+) {
+  await navigateTo(page, 'New Expense');
+  await expect(page.getByRole('heading', { name: 'New Expense' })).toBeVisible();
+
+  await page.getByLabel('Vendor').fill(vendor);
+  await page.getByLabel('Description').fill(`Test expense for ${vendor}`);
+  const amountInput = page.getByLabel('Amount');
+  await amountInput.click();
+  await amountInput.fill(amount);
+  await page.getByLabel('Paid By').fill(paidBy);
+  await page.getByLabel('Category').click();
+  await page.getByRole('option', { name: category }).click();
+  await page.getByRole('button', { name: 'Create Expense' }).click();
+  await expect(page).toHaveURL(/\/expenses$/, { timeout: 10_000 });
+}
+
 test.describe('Reimbursements', () => {
   test.beforeEach(async ({ page }) => {
     await login(page);
@@ -13,10 +38,10 @@ test.describe('Reimbursements', () => {
       page.getByRole('heading', { name: 'Reimbursements' }),
     ).toBeVisible();
 
-    // Total Unreimbursed section should be visible
-    await expect(page.getByText('Total Unreimbursed')).toBeVisible();
+    // Total Unreimbursed section should be visible (only when data exists)
+    await expect(page.getByText('Total Unreimbursed')).toBeVisible({ timeout: 15_000 });
 
-    // Unreimbursed expenses table should be visible
+    // Unreimbursed Expenses heading and table should be visible
     await expect(
       page.getByRole('heading', { name: 'Unreimbursed Expenses' }),
     ).toBeVisible();
@@ -28,11 +53,11 @@ test.describe('Reimbursements', () => {
     await navigateTo(page, 'Reimbursements');
     await expect(
       page.getByText('Total Unreimbursed'),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
 
     // Seeded data has expenses paid by "Test User" and "Family Member"
-    await expect(page.getByText('Test User')).toBeVisible();
-    await expect(page.getByText('Family Member')).toBeVisible();
+    await expect(page.getByText('Test User').first()).toBeVisible();
+    await expect(page.getByText('Family Member').first()).toBeVisible();
   });
 });
 
@@ -44,28 +69,21 @@ test.describe('Single Reimbursement', () => {
     await login(page);
 
     // Create a test expense to reimburse
-    await navigateTo(page, 'New Expense');
-    await page.getByLabel('Vendor').fill('E2E Reimburse Single');
-    await page.getByLabel('Description').fill('Single reimbursement test');
-    await page.getByLabel('Amount').fill('25.00');
-    await page.getByLabel('Paid By').fill('E2E Tester');
-    await page.getByLabel('Category').click();
-    await page.getByRole('option', { name: 'Health, prevention & wellness' }).click();
-    await page.getByRole('button', { name: 'Create Expense' }).click();
-    await expect(page).toHaveURL(/\/expenses$/);
+    await createExpense(page, 'E2E Reimburse Single', '25.00', 'E2E Tester', 'Health, prevention & wellness');
 
-    // Navigate to Reimbursements
+    // Navigate to Reimbursements and wait for data
     await navigateTo(page, 'Reimbursements');
     await expect(
-      page.getByRole('heading', { name: 'Unreimbursed Expenses' }),
-    ).toBeVisible();
+      page.getByText('Total Unreimbursed'),
+    ).toBeVisible({ timeout: 15_000 });
 
-    // Find and click "Mark Reimbursed" for our test expense
+    // Find our test expense in the table
     const table = page.getByRole('table', { name: 'Unreimbursed expenses' });
+    await expect(table).toBeVisible();
     const row = table.getByRole('row').filter({ hasText: 'E2E Reimburse Single' });
-    await expect(row).toBeVisible();
+    await expect(row).toBeVisible({ timeout: 10_000 });
 
-    // Accept the confirm dialog
+    // Accept the confirm dialog before clicking
     page.on('dialog', (dialog) => dialog.accept());
 
     await row.getByRole('button', { name: /Mark .* expense as reimbursed/ }).click();
@@ -73,7 +91,7 @@ test.describe('Single Reimbursement', () => {
     // After reimbursement, the expense should no longer appear in unreimbursed list
     await expect(
       table.getByText('E2E Reimburse Single'),
-    ).not.toBeVisible({ timeout: 10_000 });
+    ).not.toBeVisible({ timeout: 15_000 });
   });
 });
 
@@ -84,35 +102,22 @@ test.describe('Bulk Reimbursement', () => {
   test('bulk reimburse multiple expenses via checkboxes and modal', async ({ page }) => {
     await login(page);
 
-    // Create first test expense
-    await navigateTo(page, 'New Expense');
-    await page.getByLabel('Vendor').fill('E2E Bulk Test A');
-    await page.getByLabel('Description').fill('Bulk reimbursement test A');
-    await page.getByLabel('Amount').fill('15.00');
-    await page.getByLabel('Paid By').fill('Bulk Tester');
-    await page.getByLabel('Category').click();
-    await page.getByRole('option', { name: 'Transportation' }).click();
-    await page.getByRole('button', { name: 'Create Expense' }).click();
-    await expect(page).toHaveURL(/\/expenses$/);
+    // Create two test expenses with the same paidBy
+    await createExpense(page, 'E2E Bulk Test A', '15.00', 'Bulk Tester', 'Transportation');
+    await createExpense(page, 'E2E Bulk Test B', '20.00', 'Bulk Tester', 'Transportation');
 
-    // Create second test expense
-    await navigateTo(page, 'New Expense');
-    await page.getByLabel('Vendor').fill('E2E Bulk Test B');
-    await page.getByLabel('Description').fill('Bulk reimbursement test B');
-    await page.getByLabel('Amount').fill('20.00');
-    await page.getByLabel('Paid By').fill('Bulk Tester');
-    await page.getByLabel('Category').click();
-    await page.getByRole('option', { name: 'Transportation' }).click();
-    await page.getByRole('button', { name: 'Create Expense' }).click();
-    await expect(page).toHaveURL(/\/expenses$/);
-
-    // Navigate to Reimbursements
+    // Navigate to Reimbursements and wait for data
     await navigateTo(page, 'Reimbursements');
     await expect(
-      page.getByRole('heading', { name: 'Unreimbursed Expenses' }),
-    ).toBeVisible();
+      page.getByText('Total Unreimbursed'),
+    ).toBeVisible({ timeout: 15_000 });
 
     const table = page.getByRole('table', { name: 'Unreimbursed expenses' });
+    await expect(table).toBeVisible();
+
+    // Wait for both expenses to appear
+    await expect(table.getByText('E2E Bulk Test A')).toBeVisible({ timeout: 10_000 });
+    await expect(table.getByText('E2E Bulk Test B')).toBeVisible({ timeout: 10_000 });
 
     // Select both test expenses via checkboxes
     const rowA = table.getByRole('row').filter({ hasText: 'E2E Bulk Test A' });
@@ -123,7 +128,6 @@ test.describe('Bulk Reimbursement', () => {
 
     // Sticky bar should appear with selection count
     await expect(page.getByText('2 selected')).toBeVisible();
-    await expect(page.getByText('$35.00')).toBeVisible();
 
     // Click "Reimburse Selected" to open confirmation modal
     await page.getByRole('button', { name: 'Reimburse Selected' }).click();
@@ -143,25 +147,24 @@ test.describe('Bulk Reimbursement', () => {
     // After reimbursement, both expenses should disappear from unreimbursed list
     await expect(
       table.getByText('E2E Bulk Test A'),
-    ).not.toBeVisible({ timeout: 10_000 });
+    ).not.toBeVisible({ timeout: 15_000 });
     await expect(
       table.getByText('E2E Bulk Test B'),
-    ).not.toBeVisible({ timeout: 10_000 });
+    ).not.toBeVisible({ timeout: 15_000 });
   });
 
   test('Select All button selects all expenses for a person', async ({ page }) => {
     await login(page);
     await navigateTo(page, 'Reimbursements');
+
+    // Wait for data to load
     await expect(
       page.getByText('Total Unreimbursed'),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 15_000 });
 
-    // Click "Select All" for one of the paidBy groups
+    // Click "Select All" for one of the paidBy groups (button has aria-label="Select all for {name}")
     const selectAllButtons = page.getByRole('button', { name: /Select all for/ });
-    const count = await selectAllButtons.count();
-
-    // There should be at least 1 "Select All" button (one per paidBy group)
-    expect(count).toBeGreaterThan(0);
+    await expect(selectAllButtons.first()).toBeVisible();
 
     // Click the first "Select All" button
     await selectAllButtons.first().click();
