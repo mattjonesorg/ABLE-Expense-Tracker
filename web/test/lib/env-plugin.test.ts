@@ -81,4 +81,12 @@ describe('envValidationPlugin', () => {
     const plugin = envValidationPlugin(['VITE_MISSING_VAR']);
     expect(() => callConfigHook(plugin)).not.toThrow();
   });
+
+  it('skips validation when SKIP_ENV_VALIDATION is set', () => {
+    process.env['SKIP_ENV_VALIDATION'] = 'true';
+    delete process.env['VITE_MISSING_VAR'];
+
+    const plugin = envValidationPlugin(['VITE_MISSING_VAR']);
+    expect(() => callConfigHook(plugin)).not.toThrow();
+  });
 });

@@ -27,6 +27,8 @@ jobs:
 
       - name: Build
         run: pnpm build
+        env:
+          SKIP_ENV_VALIDATION: 'true'
 
       - name: Validate Claude Code hooks format
         run: node scripts/validate-hooks.mjs

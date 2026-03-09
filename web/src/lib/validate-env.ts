@@ -28,7 +28,7 @@ export function validateRequiredEnvVars(
 /**
  * Vite plugin that checks required VITE_* env vars at build time.
  * Fails the build immediately with a clear error if any are missing.
- * Skips validation during vitest runs (env vars are stubbed per-test).
+ * Skips validation during vitest runs and when SKIP_ENV_VALIDATION is set.
  */
 export function envValidationPlugin(required: readonly string[]): Plugin {
   return {
@@ -36,6 +36,10 @@ export function envValidationPlugin(required: readonly string[]): Plugin {
     config(_config, { command }) {
       // Skip during vitest — tests stub env vars individually
       if (process.env['VITEST']) {
+        return;
+      }
+      // Skip when explicitly opted out (e.g., CI test-only builds that don't deploy)
+      if (process.env['SKIP_ENV_VALIDATION']) {
         return;
       }
       const missing = validateRequiredEnvVars(required, process.env);
