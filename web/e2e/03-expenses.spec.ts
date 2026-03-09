@@ -70,7 +70,7 @@ test.describe('Create Expense', () => {
     await expect(page.getByLabel('Amount')).toBeVisible();
     await expect(page.getByLabel('Date')).toBeVisible();
     await expect(page.getByLabel('Paid By')).toBeVisible();
-    await expect(page.getByLabel('Category')).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Category' })).toBeVisible();
     await expect(
       page.getByRole('button', { name: 'Create Expense' }),
     ).toBeVisible();
@@ -104,7 +104,7 @@ test.describe('Create Expense', () => {
     await page.getByLabel('Paid By').fill('E2E Tester');
 
     // Select a category — click input to open dropdown, then click option
-    await page.getByLabel('Category').click();
+    await page.getByRole('textbox', { name: 'Category' }).click();
     await page.getByRole('option', { name: 'Health, prevention & wellness' }).click();
 
     // Submit the form

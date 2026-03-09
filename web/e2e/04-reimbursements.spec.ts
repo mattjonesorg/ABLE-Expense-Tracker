@@ -21,7 +21,7 @@ async function createExpense(
   await amountInput.click();
   await amountInput.fill(amount);
   await page.getByLabel('Paid By').fill(paidBy);
-  await page.getByLabel('Category').click();
+  await page.getByRole('textbox', { name: 'Category' }).click();
   await page.getByRole('option', { name: category }).click();
   await page.getByRole('button', { name: 'Create Expense' }).click();
   await expect(page).toHaveURL(/\/expenses$/, { timeout: 10_000 });
