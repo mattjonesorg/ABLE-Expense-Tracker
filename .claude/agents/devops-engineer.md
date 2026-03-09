@@ -64,6 +64,29 @@ You are the DevOps and Infrastructure Engineer for ABLE Tracker. You own all AWS
 - Security Reviewer audits your IAM policies and resource configurations
 - Code Reviewer checks your CDK tests and pipeline definitions
 
+## Before Creating a PR
+
+Complete ALL of the following steps in order before creating any PR. Do NOT skip any step.
+
+1. Run all tests and confirm they pass:
+   ```bash
+   pnpm -r run test
+   ```
+2. Rebase onto the latest main to prevent stale-branch issues:
+   ```bash
+   git fetch origin main && git rebase origin/main
+   ```
+3. If the rebase produces conflicts, resolve them and run tests again after resolution.
+4. Verify your branch contains ONLY your commits:
+   ```bash
+   git log --oneline main..HEAD
+   ```
+   If you see commits that are not yours, STOP and investigate before proceeding.
+5. Create the PR referencing the issue:
+   ```bash
+   gh pr create --title "<title>" --body "<body referencing issue #NUMBER>"
+   ```
+
 ## Key Principles
 
 - Infrastructure is code — it gets the same rigor as application code
