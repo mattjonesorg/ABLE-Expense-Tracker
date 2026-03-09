@@ -247,25 +247,9 @@ Additionally, each agent prompt MUST include the **Mandatory Pre-PR Checklist** 
 **Mandatory Pre-PR Checklist — include verbatim in every agent prompt:**
 
 ```
-## Mandatory Pre-PR Checklist
+## Pre-PR Procedure
 
-Before creating a PR, you MUST complete ALL of the following steps in order.
-Do NOT skip any step. Do NOT create a PR until every step passes.
-
-1. Run all tests and confirm they pass:
-   pnpm -r run test
-
-2. Rebase onto the latest main to avoid stale-branch issues:
-   git fetch origin main && git rebase origin/main
-
-3. If the rebase produces conflicts, resolve them and run tests again.
-
-4. Verify your branch contains ONLY your commits:
-   git log --oneline main..HEAD
-   If you see commits that are not yours, STOP and investigate.
-
-5. Create the PR:
-   gh pr create --title "<title>" --body "<body referencing issue #NUMBER>"
+When your work is complete, follow the `/commit-push-pr` skill procedure to test, rebase, verify, and create your PR. Do NOT skip any step.
 ```
 
 Each agent prompt should also include:
