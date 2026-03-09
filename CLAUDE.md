@@ -121,6 +121,13 @@ These are non-negotiable. Every agent must follow them. They are the guardrails 
 - `matcher` is a regex matched against tool names (e.g., `"Write|Edit"`, `"Bash"`)
 - Each hook object requires `type` (`"command"`, `"prompt"`, or `"agent"`) plus the corresponding field
 
+#### Active Hooks
+
+| Hook Script | Trigger | Purpose |
+|-------------|---------|---------|
+| `check-secrets-pretooluse.sh` | `Write\|Edit` | Blocks commits containing hardcoded secrets, API keys, or credentials |
+| `check-ci-antipatterns.sh` | `Write\|Edit` | Blocks `\|\| true`, `\|\| exit 0`, `; true` on test commands in workflow YAML files. Use `continue-on-error: true` instead. |
+
 ### Git Conventions
 
 - **`main` is protected.** Never push directly to main. All changes must go through a feature branch and PR.
