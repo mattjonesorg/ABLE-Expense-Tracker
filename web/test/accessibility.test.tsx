@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { expectNoA11yViolations } from './a11y-helpers';
 import { MantineProvider } from '@mantine/core';
 import { Notifications } from '@mantine/notifications';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -364,6 +365,65 @@ describe('Accessibility', () => {
       dataRows.forEach((row) => {
         expect(row.style.cursor).not.toBe('pointer');
       });
+    });
+  });
+
+  describe('axe-core automated scanning', () => {
+    it('Dashboard has no accessibility violations', async () => {
+      const { container } = renderWithShell('/');
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: /dashboard/i })).toBeInTheDocument();
+      });
+      await expectNoA11yViolations(container);
+    });
+
+    it('Expenses page has no accessibility violations', async () => {
+      const { container } = renderWithShell('/expenses');
+      await waitFor(() => {
+        expect(screen.getByRole('table')).toBeInTheDocument();
+      });
+      await expectNoA11yViolations(container);
+    });
+
+    it('ExpenseForm page has no accessibility violations', async () => {
+      const { container } = renderWithShell('/expenses/new');
+      await waitFor(() => {
+        expect(screen.getByRole('form', { name: /new expense form/i })).toBeInTheDocument();
+      });
+      await expectNoA11yViolations(container);
+    });
+
+    it('Reimbursements page has no accessibility violations', async () => {
+      const { container } = renderWithShell('/reimbursements');
+      await waitFor(() => {
+        expect(screen.getByRole('table')).toBeInTheDocument();
+      });
+      await expectNoA11yViolations(container);
+    });
+
+    it('Reports page has no accessibility violations', async () => {
+      const { container } = renderWithShell('/reports');
+      await waitFor(() => {
+        expect(screen.getByTestId('category-table')).toBeInTheDocument();
+      });
+      await expectNoA11yViolations(container);
+    });
+
+    it('Login page has no accessibility violations', async () => {
+      const { container } = render(
+        <MantineProvider>
+          <Notifications />
+          <MemoryRouter initialEntries={['/login']}>
+            <AuthProvider>
+              <Login />
+            </AuthProvider>
+          </MemoryRouter>
+        </MantineProvider>,
+      );
+      await waitFor(() => {
+        expect(screen.getByRole('form', { name: /sign in form/i })).toBeInTheDocument();
+      });
+      await expectNoA11yViolations(container);
     });
   });
 });

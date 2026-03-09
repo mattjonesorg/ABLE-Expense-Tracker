@@ -2,12 +2,21 @@ import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
 import { Construct } from 'constructs';
 
+export interface AuthStackProps extends cdk.StackProps {
+  /** When true, sets DESTROY removal policy for ephemeral environments. */
+  readonly ephemeral?: boolean;
+}
+
 export class AuthStack extends cdk.Stack {
   public readonly userPool: cognito.UserPool;
   public readonly userPoolClient: cognito.UserPoolClient;
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: AuthStackProps) {
     super(scope, id, props);
+
+    const removalPolicy = props?.ephemeral
+      ? cdk.RemovalPolicy.DESTROY
+      : cdk.RemovalPolicy.RETAIN;
 
     this.userPool = new cognito.UserPool(this, 'UserPool', {
       selfSignUpEnabled: false,
@@ -28,7 +37,7 @@ export class AuthStack extends cdk.Stack {
         role: new cognito.StringAttribute({ mutable: true }),
         accountId: new cognito.StringAttribute({ mutable: true }),
       },
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy,
     });
 
     this.userPoolClient = new cognito.UserPoolClient(this, 'UserPoolClient', {

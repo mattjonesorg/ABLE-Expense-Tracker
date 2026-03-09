@@ -82,6 +82,16 @@ export interface ReimbursementSummary {
   expenseCount: number;
 }
 
+export interface BulkReimburseRequest {
+  expenseIds: string[];
+  reimbursedBy: string;
+}
+
+export interface BulkReimburseResponse {
+  expenses: Expense[];
+  count: number;
+}
+
 export interface ApiError {
   error: string;
   code: string;

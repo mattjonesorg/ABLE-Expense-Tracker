@@ -83,6 +83,16 @@ export interface ListExpensesFilters {
   reimbursed?: boolean;
 }
 
+export interface BulkReimburseRequest {
+  expenseIds: string[]; // 1-100 items
+  reimbursedBy: string;
+}
+
+export interface BulkReimburseResponse {
+  expenses: Expense[];
+  count: number;
+}
+
 export interface ApiError {
   error: string;
   code: string;

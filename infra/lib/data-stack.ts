@@ -3,6 +3,11 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 
+export interface DataStackProps extends cdk.StackProps {
+  /** When true, sets DESTROY removal policy and autoDeleteObjects for ephemeral environments. */
+  readonly ephemeral?: boolean;
+}
+
 /**
  * DataStack provisions the core data layer for ABLE Tracker:
  * - A DynamoDB single-table with PK/SK and two GSIs for flexible access patterns
@@ -15,8 +20,13 @@ export class DataStack extends cdk.Stack {
   /** The S3 bucket for receipt/document storage. */
   public readonly bucket: s3.Bucket;
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: DataStackProps) {
     super(scope, id, props);
+
+    const isEphemeral = props?.ephemeral === true;
+    const removalPolicy = isEphemeral
+      ? cdk.RemovalPolicy.DESTROY
+      : cdk.RemovalPolicy.RETAIN;
 
     // --- DynamoDB Single-Table ---
     this.table = new dynamodb.Table(this, 'AbleTrackerTable', {
@@ -24,7 +34,7 @@ export class DataStack extends cdk.Stack {
       sortKey: { name: 'SK', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true },
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy,
     });
 
     // GSI1 — supports access patterns like "all expenses for a user"
@@ -48,8 +58,9 @@ export class DataStack extends cdk.Stack {
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
       encryption: s3.BucketEncryption.S3_MANAGED,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy,
       enforceSSL: true,
+      ...(isEphemeral ? { autoDeleteObjects: true } : {}),
     });
 
     // --- Stack Outputs ---

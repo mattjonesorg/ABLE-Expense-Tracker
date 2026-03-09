@@ -6,7 +6,7 @@
  * Replaces the previous mock implementation as part of issue #54.
  */
 
-import type { Expense, AbleCategory, CategoryResult, ReimbursementSummary } from './types';
+import type { Expense, AbleCategory, CategoryResult, ReimbursementSummary, BulkReimburseResponse } from './types';
 import { API_URL } from './config';
 import { getIdToken } from './auth';
 
@@ -236,4 +236,16 @@ export async function getReimbursementSummaries(): Promise<ReimbursementSummary[
   }
 
   return [];
+}
+
+export async function bulkReimburseExpenses(
+  expenseIds: string[],
+  reimbursedBy: string,
+): Promise<BulkReimburseResponse> {
+  const response = await apiRequest('/expenses/reimburse-bulk', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expenseIds, reimbursedBy }),
+  });
+  return (await safeParseJson(response)) as BulkReimburseResponse;
 }

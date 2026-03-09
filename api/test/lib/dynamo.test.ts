@@ -6,6 +6,7 @@ import {
   QueryCommand,
   UpdateCommand,
   DeleteCommand,
+  TransactWriteCommand,
 } from '@aws-sdk/lib-dynamodb';
 import { ExpenseRepository } from '../../src/lib/dynamo.js';
 import type { AbleCategory, CreateExpenseInput, Expense } from '../../src/lib/types.js';
@@ -535,6 +536,94 @@ describe('ExpenseRepository', () => {
 
       const calls = ddbMock.commandCalls(UpdateCommand);
       expect(calls[0].args[0].input.ReturnValues).toBe('ALL_NEW');
+    });
+  });
+
+  describe('markReimbursedBulk', () => {
+    it('sends TransactWriteCommand with correct transact items for each expense', async () => {
+      const expenses = [
+        makeSampleExpense({ expenseId: 'EXP_A', date: '2025-03-10', paidBy: 'user-alice' }),
+        makeSampleExpense({ expenseId: 'EXP_B', date: '2025-03-12', paidBy: 'user-bob' }),
+      ];
+
+      ddbMock.on(TransactWriteCommand).resolves({});
+
+      await repo.markReimbursedBulk('acct-123', expenses);
+
+      const calls = ddbMock.commandCalls(TransactWriteCommand);
+      expect(calls).toHaveLength(1);
+
+      const transactItems = calls[0].args[0].input.TransactItems;
+      expect(transactItems).toHaveLength(2);
+    });
+
+    it('uses Update operation with condition expression to prevent double-reimbursement', async () => {
+      const expenses = [
+        makeSampleExpense({ expenseId: 'EXP_A', date: '2025-03-10', paidBy: 'user-alice' }),
+      ];
+
+      ddbMock.on(TransactWriteCommand).resolves({});
+
+      await repo.markReimbursedBulk('acct-123', expenses);
+
+      const calls = ddbMock.commandCalls(TransactWriteCommand);
+      const transactItems = calls[0].args[0].input.TransactItems!;
+      const updateItem = transactItems[0].Update!;
+
+      expect(updateItem.Key).toEqual({
+        PK: 'ACCOUNT#acct-123',
+        SK: 'EXP#2025-03-10#EXP_A',
+      });
+      expect(updateItem.ConditionExpression).toContain('reimbursed = :false');
+      expect(updateItem.UpdateExpression).toContain('reimbursed');
+      expect(updateItem.UpdateExpression).toContain('reimbursedAt');
+      expect(updateItem.UpdateExpression).toContain('updatedAt');
+      expect(updateItem.UpdateExpression).toContain('#gsi2sk');
+    });
+
+    it('sets correct GSI2SK values using each expense paidBy', async () => {
+      const expenses = [
+        makeSampleExpense({ expenseId: 'EXP_A', date: '2025-03-10', paidBy: 'user-alice' }),
+        makeSampleExpense({ expenseId: 'EXP_B', date: '2025-03-12', paidBy: 'user-bob' }),
+      ];
+
+      ddbMock.on(TransactWriteCommand).resolves({});
+
+      await repo.markReimbursedBulk('acct-123', expenses);
+
+      const calls = ddbMock.commandCalls(TransactWriteCommand);
+      const transactItems = calls[0].args[0].input.TransactItems!;
+
+      expect(transactItems[0].Update!.ExpressionAttributeValues![':gsi2sk']).toBe('PAID#user-alice#1#2025-03-10');
+      expect(transactItems[1].Update!.ExpressionAttributeValues![':gsi2sk']).toBe('PAID#user-bob#1#2025-03-12');
+    });
+
+    it('returns updated expenses with reimbursed=true and timestamps', async () => {
+      const expenses = [
+        makeSampleExpense({ expenseId: 'EXP_A', date: '2025-03-10', paidBy: 'user-alice' }),
+      ];
+
+      ddbMock.on(TransactWriteCommand).resolves({});
+
+      const result = await repo.markReimbursedBulk('acct-123', expenses);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].reimbursed).toBe(true);
+      expect(result[0].reimbursedAt).toBe('2025-03-15T10:00:00.000Z');
+      expect(result[0].updatedAt).toBe('2025-03-15T10:00:00.000Z');
+      expect(result[0].expenseId).toBe('EXP_A');
+    });
+
+    it('propagates TransactionCanceledException when condition check fails', async () => {
+      const expenses = [
+        makeSampleExpense({ expenseId: 'EXP_A', date: '2025-03-10', paidBy: 'user-alice' }),
+      ];
+
+      const error = new Error('Transaction cancelled');
+      error.name = 'TransactionCanceledException';
+      ddbMock.on(TransactWriteCommand).rejects(error);
+
+      await expect(repo.markReimbursedBulk('acct-123', expenses)).rejects.toThrow('Transaction cancelled');
     });
   });
 
