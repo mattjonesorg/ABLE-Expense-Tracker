@@ -263,6 +263,39 @@ async function main() {
     });
     console.log('  OK');
 
+    // -------------------------------------------------------
+    // 11 — Reimbursements page (with mock data showing checkboxes)
+    // -------------------------------------------------------
+    console.log('Capturing 11-reimbursements...');
+    await page.goto(`${APP_URL}/reimbursements`, { waitUntil: 'networkidle' });
+    await page.waitForTimeout(2000);
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, '11-reimbursements.png'),
+      fullPage: false,
+    });
+    console.log('  OK');
+
+    // -------------------------------------------------------
+    // 14 — Bulk reimbursement (checkboxes selected with sticky bar)
+    // -------------------------------------------------------
+    console.log('Capturing 14-bulk-reimburse...');
+    // Check if there are checkboxes to select
+    const checkboxes = page.locator('input[type="checkbox"]');
+    const checkboxCount = await checkboxes.count();
+    if (checkboxCount > 0) {
+      // Select first two checkboxes
+      await checkboxes.nth(0).check();
+      if (checkboxCount > 1) {
+        await checkboxes.nth(1).check();
+      }
+      await page.waitForTimeout(500);
+    }
+    await page.screenshot({
+      path: path.join(SCREENSHOTS_DIR, '14-bulk-reimburse.png'),
+      fullPage: false,
+    });
+    console.log('  OK');
+
     console.log('\nAll screenshots captured successfully!');
 
   } catch (error) {
