@@ -146,6 +146,59 @@ jobs:
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
         run: node scripts/seed-test-data.mjs
 
+      - name: Smoke-test API
+        env:
+          API_URL: ${{ steps.outputs.outputs.api-url }}
+          USER_POOL_ID: ${{ steps.outputs.outputs.user-pool-id }}
+          CLIENT_ID: ${{ steps.outputs.outputs.client-id }}
+          E2E_TEST_EMAIL: e2e-test@abletracker.local
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+        run: |
+          echo "=== API Smoke Test ==="
+          echo "API URL: $API_URL"
+
+          # Authenticate with test credentials and get token
+          AUTH_RESULT=$(aws cognito-idp initiate-auth \
+            --auth-flow USER_PASSWORD_AUTH \
+            --client-id "$CLIENT_ID" \
+            --auth-parameters "USERNAME=$E2E_TEST_EMAIL,PASSWORD=$E2E_TEST_PASSWORD" \
+            --query 'AuthenticationResult.IdToken' --output text)
+
+          echo "Token length: ${#AUTH_RESULT}"
+
+          # Test the list expenses endpoint
+          echo ""
+          echo "=== GET /expenses ==="
+          HTTP_CODE=$(curl -s -o /tmp/api-response.json -w '%{http_code}' \
+            -H "Authorization: Bearer $AUTH_RESULT" \
+            "$API_URL/expenses")
+          echo "HTTP status: $HTTP_CODE"
+          echo "Response body:"
+          cat /tmp/api-response.json | head -c 500
+          echo ""
+
+          # Test the dashboard reimbursements endpoint
+          echo ""
+          echo "=== GET /dashboard/reimbursements ==="
+          HTTP_CODE=$(curl -s -o /tmp/api-response2.json -w '%{http_code}' \
+            -H "Authorization: Bearer $AUTH_RESULT" \
+            "$API_URL/dashboard/reimbursements")
+          echo "HTTP status: $HTTP_CODE"
+          echo "Response body:"
+          cat /tmp/api-response2.json | head -c 500
+          echo ""
+
+          # Test CORS preflight
+          echo ""
+          echo "=== OPTIONS /expenses (CORS preflight) ==="
+          WEBSITE_URL="${{ steps.outputs.outputs.website-url }}"
+          curl -s -D - -o /dev/null \
+            -X OPTIONS \
+            -H "Origin: $WEBSITE_URL" \
+            -H "Access-Control-Request-Method: GET" \
+            -H "Access-Control-Request-Headers: Authorization" \
+            "$API_URL/expenses" | head -20
+
       - name: Install Playwright browsers
         working-directory: web
         run: npx playwright install --with-deps chromium
