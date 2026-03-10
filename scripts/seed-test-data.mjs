@@ -67,7 +67,7 @@ function createTestUser() {
     awsCli(
       `cognito-idp admin-create-user --user-pool-id "${USER_POOL_ID}" --username "${E2E_EMAIL}" ` +
       `--temporary-password "${E2E_PASSWORD}" ` +
-      `--user-attributes Name=email,Value="${E2E_EMAIL}" Name=email_verified,Value=true Name=custom:role,Value=owner Name=custom:accountId,Value=ACCT-E2E-TEST Name=custom:displayName,Value="Test User" ` +
+      `--user-attributes Name=email,Value="${E2E_EMAIL}" Name=email_verified,Value=true Name=custom:role,Value=owner Name=custom:accountId,Value=ACCT-E2E-TEST ` +
       `--message-action SUPPRESS`,
     );
   } catch (err) {

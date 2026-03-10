@@ -178,8 +178,8 @@ jobs:
       - name: API smoke test
         env:
           SMOKE_CLIENT_ID: ${{ steps.outputs.outputs.client-id }}
-          SMOKE_EMAIL: ${{ steps.seed.outputs.E2E_EMAIL }}
-          SMOKE_PASS: ${{ steps.seed.outputs.E2E_PASSWORD }}
+          SMOKE_EMAIL: e2e-test@abletracker.local
+          SMOKE_PASS: ${{ secrets.E2E_TEST_PASSWORD }}
           SMOKE_REGION: ${{ vars.AWS_REGION }}
           SMOKE_API_URL: ${{ steps.outputs.outputs.api-url }}
         run: |
@@ -224,8 +224,8 @@ jobs:
         env:
           E2E_BASE_URL: ${{ steps.outputs.outputs.website-url }}
           E2E_API_URL: ${{ steps.outputs.outputs.api-url }}
-          E2E_EMAIL: ${{ steps.seed.outputs.E2E_EMAIL }}
-          E2E_PASSWORD: ${{ steps.seed.outputs.E2E_PASSWORD }}
+          E2E_EMAIL: e2e-test@abletracker.local
+          E2E_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
         run: npx playwright test --reporter=html
 
       - name: Upload Playwright report

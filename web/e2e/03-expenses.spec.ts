@@ -91,9 +91,10 @@ test.describe('Create Expense', () => {
     await expect(page.getByText('Paid by is required')).toBeVisible();
   });
 
-  test('creates a new expense successfully', async ({ page }) => {
+  test('creates a new expense successfully', async ({ page }, testInfo) => {
+    const suffix = testInfo.testId.slice(-6);
     // Fill in the form
-    await page.getByLabel('Vendor').fill('E2E Test Pharmacy');
+    await page.getByLabel('Vendor').fill(`E2E Pharmacy ${suffix}`);
     await page.getByLabel('Description').fill('E2E test expense for automated testing');
 
     // NumberInput needs click first, then type the value
@@ -116,7 +117,7 @@ test.describe('Create Expense', () => {
     // The new expense should appear in the table
     const table = page.getByRole('table', { name: 'Expense list' });
     await expect(table).toBeVisible({ timeout: 15_000 });
-    await expect(table.getByText('E2E Test Pharmacy')).toBeVisible();
+    await expect(table.getByText(`E2E Pharmacy ${suffix}`)).toBeVisible();
   });
 
   test('Suggest Category button works with vendor and description', async ({ page }) => {

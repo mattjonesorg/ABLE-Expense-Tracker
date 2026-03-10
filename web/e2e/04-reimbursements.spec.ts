@@ -65,11 +65,12 @@ test.describe('Single Reimbursement', () => {
   /**
    * To avoid mutating seed data, we create a fresh expense, then reimburse it.
    */
-  test('mark a single expense as reimbursed', async ({ page }) => {
+  test('mark a single expense as reimbursed', async ({ page }, testInfo) => {
     await login(page);
+    const suffix = testInfo.testId.slice(-6);
 
     // Create a test expense to reimburse
-    await createExpense(page, 'E2E Reimburse Single', '25.00', 'E2E Tester', 'Health, prevention & wellness');
+    await createExpense(page, `E2E Reimburse ${suffix}`, '25.00', 'E2E Tester', 'Health, prevention & wellness');
 
     // Navigate to Reimbursements and wait for data
     await navigateTo(page, 'Reimbursements');
@@ -80,7 +81,7 @@ test.describe('Single Reimbursement', () => {
     // Find our test expense in the table
     const table = page.getByRole('table', { name: 'Unreimbursed expenses' });
     await expect(table).toBeVisible();
-    const row = table.getByRole('row').filter({ hasText: 'E2E Reimburse Single' });
+    const row = table.getByRole('row').filter({ hasText: `E2E Reimburse ${suffix}` });
     await expect(row).toBeVisible({ timeout: 10_000 });
 
     // Accept the confirm dialog before clicking
@@ -90,7 +91,7 @@ test.describe('Single Reimbursement', () => {
 
     // After reimbursement, the expense should no longer appear in unreimbursed list
     await expect(
-      table.getByText('E2E Reimburse Single'),
+      table.getByText(`E2E Reimburse ${suffix}`),
     ).not.toBeVisible({ timeout: 15_000 });
   });
 });
@@ -99,12 +100,13 @@ test.describe('Bulk Reimbursement', () => {
   /**
    * Create 2 expenses, select them via checkboxes, and bulk reimburse.
    */
-  test('bulk reimburse multiple expenses via checkboxes and modal', async ({ page }) => {
+  test('bulk reimburse multiple expenses via checkboxes and modal', async ({ page }, testInfo) => {
     await login(page);
+    const suffix = testInfo.testId.slice(-6);
 
     // Create two test expenses with the same paidBy
-    await createExpense(page, 'E2E Bulk Test A', '15.00', 'Bulk Tester', 'Transportation');
-    await createExpense(page, 'E2E Bulk Test B', '20.00', 'Bulk Tester', 'Transportation');
+    await createExpense(page, `E2E Bulk A ${suffix}`, '15.00', 'Bulk Tester', 'Transportation');
+    await createExpense(page, `E2E Bulk B ${suffix}`, '20.00', 'Bulk Tester', 'Transportation');
 
     // Navigate to Reimbursements and wait for data
     await navigateTo(page, 'Reimbursements');
@@ -116,12 +118,12 @@ test.describe('Bulk Reimbursement', () => {
     await expect(table).toBeVisible();
 
     // Wait for both expenses to appear
-    await expect(table.getByText('E2E Bulk Test A')).toBeVisible({ timeout: 10_000 });
-    await expect(table.getByText('E2E Bulk Test B')).toBeVisible({ timeout: 10_000 });
+    await expect(table.getByText(`E2E Bulk A ${suffix}`)).toBeVisible({ timeout: 10_000 });
+    await expect(table.getByText(`E2E Bulk B ${suffix}`)).toBeVisible({ timeout: 10_000 });
 
     // Select both test expenses via checkboxes
-    const rowA = table.getByRole('row').filter({ hasText: 'E2E Bulk Test A' });
-    const rowB = table.getByRole('row').filter({ hasText: 'E2E Bulk Test B' });
+    const rowA = table.getByRole('row').filter({ hasText: `E2E Bulk A ${suffix}` });
+    const rowB = table.getByRole('row').filter({ hasText: `E2E Bulk B ${suffix}` });
 
     await rowA.getByRole('checkbox').check();
     await rowB.getByRole('checkbox').check();
@@ -138,18 +140,18 @@ test.describe('Bulk Reimbursement', () => {
     ).toBeVisible();
 
     // Modal should list both expenses
-    await expect(page.getByText('E2E Bulk Test A')).toBeVisible();
-    await expect(page.getByText('E2E Bulk Test B')).toBeVisible();
+    await expect(page.getByText(`E2E Bulk A ${suffix}`)).toBeVisible();
+    await expect(page.getByText(`E2E Bulk B ${suffix}`)).toBeVisible();
 
     // Confirm the bulk reimbursement
     await page.getByRole('button', { name: 'Confirm' }).click();
 
     // After reimbursement, both expenses should disappear from unreimbursed list
     await expect(
-      table.getByText('E2E Bulk Test A'),
+      table.getByText(`E2E Bulk A ${suffix}`),
     ).not.toBeVisible({ timeout: 15_000 });
     await expect(
-      table.getByText('E2E Bulk Test B'),
+      table.getByText(`E2E Bulk B ${suffix}`),
     ).not.toBeVisible({ timeout: 15_000 });
   });
 
