@@ -166,6 +166,18 @@ jobs:
 
           echo "Token length: ${#AUTH_RESULT}"
 
+          # Decode JWT payload (base64url decode the middle part)
+          JWT_PAYLOAD=$(echo "$AUTH_RESULT" | cut -d. -f2 | tr '_-' '/+' | base64 -d 2>/dev/null || true)
+          echo "JWT payload (redacted):"
+          echo "$JWT_PAYLOAD" | python3 -c "
+          import json, sys
+          try:
+              d = json.load(sys.stdin)
+              safe = {k: v for k, v in d.items() if k in ('iss','aud','token_use','custom:role','custom:accountId','exp','auth_time')}
+              print(json.dumps(safe, indent=2))
+          except: print('Could not parse JWT')
+          "
+
           # Test the list expenses endpoint
           echo ""
           echo "=== GET /expenses ==="
