@@ -92,7 +92,7 @@ test.describe('Create Expense', () => {
   });
 
   test('creates a new expense successfully', async ({ page }, testInfo) => {
-    const suffix = testInfo.testId.slice(-6);
+    const suffix = `${testInfo.testId.slice(-6)}-r${testInfo.retry}`;
     // Fill in the form
     await page.getByLabel('Vendor').fill(`E2E Pharmacy ${suffix}`);
     await page.getByLabel('Description').fill('E2E test expense for automated testing');

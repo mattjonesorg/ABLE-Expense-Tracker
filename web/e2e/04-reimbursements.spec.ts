@@ -67,7 +67,7 @@ test.describe('Single Reimbursement', () => {
    */
   test('mark a single expense as reimbursed', async ({ page }, testInfo) => {
     await login(page);
-    const suffix = testInfo.testId.slice(-6);
+    const suffix = `${testInfo.testId.slice(-6)}-r${testInfo.retry}`;
 
     // Create a test expense to reimburse
     await createExpense(page, `E2E Reimburse ${suffix}`, '25.00', 'E2E Tester', 'Health, prevention & wellness');
@@ -102,7 +102,7 @@ test.describe('Bulk Reimbursement', () => {
    */
   test('bulk reimburse multiple expenses via checkboxes and modal', async ({ page }, testInfo) => {
     await login(page);
-    const suffix = testInfo.testId.slice(-6);
+    const suffix = `${testInfo.testId.slice(-6)}-r${testInfo.retry}`;
 
     // Create two test expenses with the same paidBy
     await createExpense(page, `E2E Bulk A ${suffix}`, '15.00', 'Bulk Tester', 'Transportation');
