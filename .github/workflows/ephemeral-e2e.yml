@@ -87,9 +87,11 @@ jobs:
       - name: CDK deploy ephemeral stacks
         working-directory: infra
         run: |
+          WEBSITE_ORIGIN="http://abletracker-$(echo ${{ env.ENV_PREFIX }} | tr '[:upper:]' '[:lower:]')-frontend.s3-website-${{ vars.AWS_REGION }}.amazonaws.com"
           npx cdk deploy --all --require-approval never \
             --app "npx tsx bin/ephemeral-app.ts" \
-            -c envPrefix=${{ env.ENV_PREFIX }}
+            -c envPrefix=${{ env.ENV_PREFIX }} \
+            -c allowedOrigins=$WEBSITE_ORIGIN
 
       - name: Get stack outputs
         id: outputs
