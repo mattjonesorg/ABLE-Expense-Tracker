@@ -178,6 +178,23 @@ jobs:
           except: print('Could not parse JWT')
           "
 
+          # Check the API Gateway authorizer configuration
+          API_ID=$(aws cloudformation describe-stacks --stack-name "AbleTracker-${{ env.ENV_PREFIX }}-Api" \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text | sed 's|https://||;s|\.execute-api.*||')
+          echo "API ID: $API_ID"
+          AUTHORIZERS=$(aws apigatewayv2 get-authorizers --api-id "$API_ID" --output json 2>/dev/null || echo '{}')
+          echo "Authorizers:"
+          echo "$AUTHORIZERS" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for a in data.get('Items', []):
+              print(f\"  Name: {a.get('Name')}\")
+              print(f\"  Type: {a.get('AuthorizerType')}\")
+              print(f\"  Issuer: {a.get('JwtConfiguration', {}).get('Issuer')}\")
+              print(f\"  Audience: {a.get('JwtConfiguration', {}).get('Audience')}\")
+              print(f\"  IdentitySource: {a.get('IdentitySource')}\")
+          " 2>/dev/null || echo "Failed to get authorizers"
+
           # Test the list expenses endpoint
           echo ""
           echo "=== GET /expenses ==="
