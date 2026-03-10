@@ -135,16 +135,15 @@ test.describe('Bulk Reimbursement', () => {
     await page.getByRole('button', { name: 'Reimburse Selected' }).click();
 
     // Confirmation modal should appear
-    await expect(
-      page.getByText('Confirm Bulk Reimbursement'),
-    ).toBeVisible();
+    const modal = page.getByLabel('Confirm Bulk Reimbursement');
+    await expect(modal).toBeVisible();
 
     // Modal should list both expenses
-    await expect(page.getByText(`E2E Bulk A ${suffix}`)).toBeVisible();
-    await expect(page.getByText(`E2E Bulk B ${suffix}`)).toBeVisible();
+    await expect(modal.getByText(`E2E Bulk A ${suffix}`)).toBeVisible();
+    await expect(modal.getByText(`E2E Bulk B ${suffix}`)).toBeVisible();
 
     // Confirm the bulk reimbursement
-    await page.getByRole('button', { name: 'Confirm' }).click();
+    await modal.getByRole('button', { name: 'Confirm' }).click();
 
     // After reimbursement, both expenses should disappear from unreimbursed list
     await expect(
