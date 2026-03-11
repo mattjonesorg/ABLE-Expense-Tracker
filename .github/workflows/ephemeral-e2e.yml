@@ -84,12 +84,43 @@ jobs:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      - name: CDK deploy ephemeral stacks
+      - name: CDK deploy foundational stacks (Auth + Data + Hosting)
         working-directory: infra
         run: |
-          npx cdk deploy --all --require-approval never \
+          PREFIX="AbleTracker-${{ env.ENV_PREFIX }}"
+          npx cdk deploy "${PREFIX}-Auth" "${PREFIX}-Data" "${PREFIX}-Hosting" \
+            --require-approval never \
             --app "npx tsx bin/ephemeral-app.ts" \
             -c envPrefix=${{ env.ENV_PREFIX }}
+
+      - name: Get website URL for CORS
+        id: hosting
+        run: |
+          PREFIX="AbleTracker-${{ env.ENV_PREFIX }}"
+          WEBSITE_URL=$(aws cloudformation describe-stacks --stack-name "${PREFIX}-Hosting" \
+            --query "Stacks[0].Outputs[?OutputKey=='WebsiteUrl'].OutputValue" --output text)
+          echo "website-url=$WEBSITE_URL" >> "$GITHUB_OUTPUT"
+          echo "Website URL: $WEBSITE_URL"
+
+      - name: CDK deploy API stack (with CORS origins)
+        working-directory: infra
+        run: |
+          PREFIX="AbleTracker-${{ env.ENV_PREFIX }}"
+          WEBSITE_ORIGIN="${{ steps.hosting.outputs.website-url }}"
+          npx cdk deploy "${PREFIX}-Api" --require-approval never \
+            --app "npx tsx bin/ephemeral-app.ts" \
+            -c envPrefix=${{ env.ENV_PREFIX }} \
+            -c allowedOrigins="${WEBSITE_ORIGIN},http://localhost:5173"
+
+      - name: Wait for stacks to stabilize
+        run: |
+          PREFIX="AbleTracker-${{ env.ENV_PREFIX }}"
+          for STACK in "${PREFIX}-Auth" "${PREFIX}-Data" "${PREFIX}-Api" "${PREFIX}-Hosting"; do
+            echo "Waiting for $STACK..."
+            aws cloudformation wait stack-create-complete --stack-name "$STACK" 2>/dev/null || \
+            aws cloudformation wait stack-update-complete --stack-name "$STACK" 2>/dev/null || \
+            echo "$STACK already stable"
+          done
 
       - name: Get stack outputs
         id: outputs
@@ -144,6 +175,46 @@ jobs:
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
         run: node scripts/seed-test-data.mjs
 
+      - name: API smoke test
+        env:
+          SMOKE_CLIENT_ID: ${{ steps.outputs.outputs.client-id }}
+          SMOKE_EMAIL: e2e-test@abletracker.local
+          SMOKE_PASS: ${{ secrets.E2E_TEST_PASSWORD }}
+          SMOKE_REGION: ${{ vars.AWS_REGION }}
+          SMOKE_API_URL: ${{ steps.outputs.outputs.api-url }}
+        run: |
+          echo "Smoke-testing API at: $SMOKE_API_URL"
+
+          # Authenticate to get a token
+          AUTH_RESULT=$(aws cognito-idp initiate-auth \
+            --auth-flow USER_PASSWORD_AUTH \
+            --client-id "$SMOKE_CLIENT_ID" \
+            --auth-parameters "USERNAME=${SMOKE_EMAIL},PASSWORD=${SMOKE_PASS}" \
+            --region "$SMOKE_REGION" \
+            --query 'AuthenticationResult.IdToken' --output text)
+
+          if [ -z "$AUTH_RESULT" ] || [ "$AUTH_RESULT" = "None" ]; then
+            echo "::error::Failed to authenticate test user"
+            exit 1
+          fi
+          echo "Authentication successful"
+
+          # Test GET /expenses with auth token
+          HTTP_STATUS=$(curl -s -o /tmp/smoke-response.json -w "%{http_code}" \
+            -H "Authorization: Bearer $AUTH_RESULT" \
+            "${SMOKE_API_URL}/expenses")
+
+          echo "GET /expenses returned HTTP $HTTP_STATUS"
+          cat /tmp/smoke-response.json | head -c 500
+          echo ""
+
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "::error::API smoke test failed — GET /expenses returned $HTTP_STATUS (expected 200)"
+            exit 1
+          fi
+
+          echo "API smoke test passed"
+
       - name: Install Playwright browsers
         working-directory: web
         run: npx playwright install --with-deps chromium
@@ -153,8 +224,8 @@ jobs:
         env:
           E2E_BASE_URL: ${{ steps.outputs.outputs.website-url }}
           E2E_API_URL: ${{ steps.outputs.outputs.api-url }}
-          E2E_EMAIL: ${{ steps.seed.outputs.E2E_EMAIL }}
-          E2E_PASSWORD: ${{ steps.seed.outputs.E2E_PASSWORD }}
+          E2E_EMAIL: e2e-test@abletracker.local
+          E2E_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
         run: npx playwright test --reporter=html
 
       - name: Upload Playwright report

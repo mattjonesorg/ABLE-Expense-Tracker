@@ -67,7 +67,7 @@ function createTestUser() {
     awsCli(
       `cognito-idp admin-create-user --user-pool-id "${USER_POOL_ID}" --username "${E2E_EMAIL}" ` +
       `--temporary-password "${E2E_PASSWORD}" ` +
-      `--user-attributes Name=email,Value="${E2E_EMAIL}" Name=email_verified,Value=true Name=custom:role,Value=admin Name=custom:accountId,Value=ACCT-E2E-TEST ` +
+      `--user-attributes Name=email,Value="${E2E_EMAIL}" Name=email_verified,Value=true Name=custom:role,Value=owner Name=custom:accountId,Value=ACCT-E2E-TEST ` +
       `--message-action SUPPRESS`,
     );
   } catch (err) {
@@ -125,21 +125,28 @@ function seedExpenses() {
   ];
 
   for (const expense of expenses) {
+    const reimbursedFlag = '0'; // 0 = not reimbursed
     const item = {
       PK: { S: `ACCOUNT#${accountId}` },
-      SK: { S: `EXPENSE#${expense.id}` },
+      SK: { S: `EXP#${expense.date}#${expense.id}` },
       GSI1PK: { S: `ACCOUNT#${accountId}` },
-      GSI1SK: { S: `DATE#${expense.date}#${expense.id}` },
+      GSI1SK: { S: `CAT#${expense.category}#${expense.date}` },
       GSI2PK: { S: `ACCOUNT#${accountId}` },
-      GSI2SK: { S: `CATEGORY#${expense.category}#${expense.id}` },
+      GSI2SK: { S: `PAID#${expense.paidBy}#${reimbursedFlag}#${expense.date}` },
       expenseId: { S: expense.id },
+      accountId: { S: accountId },
       vendor: { S: expense.vendor },
       description: { S: expense.description },
       amount: { N: String(expense.amount) },
       category: { S: expense.category },
+      categoryConfidence: { S: 'user_selected' },
+      categoryNotes: { S: '' },
+      receiptKey: { NULL: true },
       date: { S: expense.date },
       paidBy: { S: expense.paidBy },
-      status: { S: 'pending' },
+      submittedBy: { S: E2E_EMAIL },
+      reimbursed: { BOOL: false },
+      reimbursedAt: { NULL: true },
       createdAt: { S: now },
       updatedAt: { S: now },
     };
