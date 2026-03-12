@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+// Schema source of truth: api/src/lib/dynamo.ts
+
 /**
  * Seeds test data into an ephemeral PR environment.
  *
@@ -58,6 +60,94 @@ function dynamoPutItem(item) {
     `aws dynamodb put-item --cli-input-json '${putItemInput.replace(/'/g, "'\\''")}'`,
     { stdio: 'pipe' },
   );
+}
+
+/**
+ * Read back a DynamoDB item by PK and SK via the AWS CLI.
+ */
+function dynamoGetItem(pk, sk) {
+  const getItemInput = JSON.stringify({
+    TableName: TABLE_NAME,
+    Key: { PK: { S: pk }, SK: { S: sk } },
+  });
+
+  const result = execSync(
+    `aws dynamodb get-item --cli-input-json '${getItemInput.replace(/'/g, "'\\''")}'`,
+    { stdio: 'pipe', encoding: 'utf-8' },
+  );
+
+  const parsed = JSON.parse(result);
+  return parsed.Item ?? null;
+}
+
+/**
+ * Verify a seeded DynamoDB expense by reading it back and comparing key fields.
+ * Exits with code 1 on mismatch.
+ */
+function verifySeededExpense(expense, accountId) {
+  const pk = `ACCOUNT#${accountId}`;
+  const sk = `EXP#${expense.date}#${expense.id}`;
+
+  console.log(`  Verifying read-back: ${expense.vendor}...`);
+  const item = dynamoGetItem(pk, sk);
+
+  if (!item) {
+    console.error(`  VERIFICATION FAILED: Item not found for PK=${pk}, SK=${sk}`);
+    process.exit(1);
+  }
+
+  const checks = [
+    { field: 'PK', expected: pk, actual: item.PK?.S },
+    { field: 'SK', expected: sk, actual: item.SK?.S },
+    { field: 'vendor', expected: expense.vendor, actual: item.vendor?.S },
+    { field: 'amount', expected: String(expense.amount), actual: item.amount?.N },
+  ];
+
+  const mismatches = checks.filter((c) => c.expected !== c.actual);
+  if (mismatches.length > 0) {
+    console.error('  VERIFICATION FAILED — field mismatches:');
+    for (const m of mismatches) {
+      console.error(`    ${m.field}: expected="${m.expected}", actual="${m.actual}"`);
+    }
+    process.exit(1);
+  }
+
+  console.log(`  Verified: ${expense.vendor} — PK, SK, vendor, amount match`);
+}
+
+/**
+ * Verify the Cognito test user exists and has expected attributes.
+ * Exits with code 1 on failure.
+ */
+function verifyCognitoUser() {
+  console.log('Verifying Cognito user...');
+
+  const result = awsCli(
+    `cognito-idp admin-get-user --user-pool-id "${USER_POOL_ID}" --username "${E2E_EMAIL}"`,
+  );
+
+  const user = JSON.parse(result);
+  const attrs = {};
+  for (const attr of user.UserAttributes ?? []) {
+    attrs[attr.Name] = attr.Value;
+  }
+
+  const checks = [
+    { field: 'email', expected: E2E_EMAIL, actual: attrs.email },
+    { field: 'custom:role', expected: 'owner', actual: attrs['custom:role'] },
+    { field: 'custom:accountId', expected: 'ACCT-E2E-TEST', actual: attrs['custom:accountId'] },
+  ];
+
+  const mismatches = checks.filter((c) => c.expected !== c.actual);
+  if (mismatches.length > 0) {
+    console.error('  COGNITO VERIFICATION FAILED — attribute mismatches:');
+    for (const m of mismatches) {
+      console.error(`    ${m.field}: expected="${m.expected}", actual="${m.actual}"`);
+    }
+    process.exit(1);
+  }
+
+  console.log(`  Verified: user=${E2E_EMAIL}, role=owner, accountId=ACCT-E2E-TEST`);
 }
 
 function createTestUser() {
@@ -154,6 +244,11 @@ function seedExpenses() {
     dynamoPutItem(item);
     console.log(`  Seeded: ${expense.vendor} — $${(expense.amount / 100).toFixed(2)}`);
   }
+
+  // Read-back verification: verify the first seeded expense
+  console.log('');
+  console.log('Verifying seeded data...');
+  verifySeededExpense(expenses[0], accountId);
 }
 
 function writeGitHubOutput() {
@@ -176,6 +271,7 @@ function main() {
   console.log('');
 
   createTestUser();
+  verifyCognitoUser();
   seedExpenses();
   writeGitHubOutput();
 
