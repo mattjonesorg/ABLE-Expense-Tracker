@@ -1,6 +1,6 @@
 # ABLE Tracker -- Product Demo
 
-> Last updated: Sprint 7, 2026-03-07
+> Last updated: Sprint 8, 2026-03-11
 
 ## What is ABLE Tracker?
 
@@ -517,6 +517,8 @@ All API endpoints require a valid Cognito JWT in the `Authorization: Bearer <tok
 - **Input validation** -- String length limits (vendor 200, description 1000, paidBy 100, categoryNotes 500), amount validation (>0, max $1M), receipt key scoping; AI categorization endpoint enforces separate input length limits
 - **Generic error messages** -- Auth failures return generic messages; no implementation details leaked
 - **Secret scanning** -- Pre-commit hook and CI pipeline scan for leaked secrets/credentials
+- **CI anti-pattern checking** -- Pre-commit hook blocks `|| true` and `|| exit 0` on test commands in workflow YAML files to prevent silent test failures
+- **Build-time env var validation** -- Vite build fails if required `VITE_*` environment variables are missing, preventing silent misconfigurations
 - **No PII to AI** -- Only vendor name and description are sent to the Claude API; no account numbers, SSNs, or personal data
 - **API throttling** -- API Gateway enforces rate limits: 100 requests/sec (200 burst) globally, with tighter limits on the AI categorization endpoint (10 requests/sec, 20 burst)
 - **Upload size limits** -- Presigned upload URLs enforce a 10 MB maximum file size, validated both at the handler level and embedded in the presigned URL signature
@@ -537,10 +539,6 @@ The following features are planned but not yet implemented:
 - **Why**: Receipts are essential for tax documentation of ABLE expenses
 - **Status**: Backend presigned URL handler exists; file input is on the form; upload wiring not yet complete
 
-### ~~Bulk Reimbursement Workflow (Issue #109)~~ -- IMPLEMENTED (Sprint 7)
-
-**Status: Implemented and deployed.** The Reimbursements page now supports checkbox multi-select with per-person "Select All" buttons, a sticky action bar with running total, and a confirmation modal. Bulk reimbursement is handled via `POST /expenses/reimburse-bulk`. See Section 8 above.
-
 ### Export to CSV/PDF (Issue #24)
 - **What**: Export filtered expenses for tax preparation
 - **Status**: Not started
@@ -556,10 +554,6 @@ The following features are planned but not yet implemented:
 ---
 
 ## Known Limitations
-
-### ~~API Deployment Gap (Issue #73, fixed in PR #76)~~ -- RESOLVED
-
-**Status: Fixed and deployed.** Lambda functions now use real TypeScript handlers bundled with esbuild via CDK `NodejsFunction`. All 7 API endpoints process real data. The CORS configuration includes the CloudFront domain so the frontend can communicate with the API.
 
 ### No Self-Registration
 
@@ -607,7 +601,7 @@ Additional documentation:
 
 ### End-to-End Tests
 
-Playwright E2E tests cover critical user paths (login flow). Run them locally or via GitHub Actions:
+Playwright E2E tests cover critical user paths across four test suites: login flow, dashboard content verification, expense list and filtering, and reimbursement workflows. Tests run against seeded data in ephemeral environments. Run them locally or via GitHub Actions:
 
 ```bash
 cd web && pnpm exec playwright test
