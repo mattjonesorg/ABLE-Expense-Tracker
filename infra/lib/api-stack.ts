@@ -174,7 +174,7 @@ export class ApiStack extends cdk.Stack {
         method: HttpMethod.GET,
         path: '/dashboard/reimbursements',
         description: 'Reimbursement summary dashboard',
-        entry: path.join(HANDLERS_DIR, 'stub.handler.ts'),
+        entry: path.join(HANDLERS_DIR, 'dashboard/reimbursements.handler.ts'),
         dynamoAccess: 'read',
       },
       {
