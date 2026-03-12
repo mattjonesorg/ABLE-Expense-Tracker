@@ -237,8 +237,12 @@ Include this block verbatim in every implementing agent's prompt:
 copy of the repository just for you. Your working directory is already set to your
 worktree root. No other agent shares this directory.
 - Run `pwd` first to confirm your working directory
-- Create your feature branch here: `git checkout -b <branch-name>`
+- Run `git fetch origin main && git rebase origin/main` to get latest code
+- Run `pnpm install` to pick up any new dependencies
+- THEN create your feature branch: `git checkout -b <branch-name>`
 - Do ALL work in this directory — do NOT cd to the main repository or other worktrees
+- After committing, run `git log --oneline -3` to verify your commit is on the branch
+- Before pushing, run `git fetch origin main && git rebase origin/main` again
 - Your worktree is independent — commit, push, and create PRs from here
 ```
 
