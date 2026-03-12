@@ -58,20 +58,24 @@ export function Dashboard() {
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    try {
-      const [summaryData, expenseData] = await Promise.all([
-        getReimbursementSummaries(),
-        listExpenses(),
-      ]);
-      setSummaries(summaryData);
-      setRecentExpenses(expenseData.slice(0, 5));
-    } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to load dashboard data';
-      setError(message);
-    } finally {
-      setIsLoading(false);
+    const [summaryResult, expenseResult] = await Promise.allSettled([
+      getReimbursementSummaries(),
+      listExpenses(),
+    ]);
+
+    const summaryData =
+      summaryResult.status === 'fulfilled' ? summaryResult.value : [];
+    const expenseData =
+      expenseResult.status === 'fulfilled' ? expenseResult.value : [];
+
+    setSummaries(summaryData);
+    setRecentExpenses(expenseData.slice(0, 5));
+
+    if (summaryResult.status === 'rejected' && expenseResult.status === 'rejected') {
+      setError('Failed to load dashboard data');
     }
+
+    setIsLoading(false);
   }, []);
 
   useEffect(() => {
