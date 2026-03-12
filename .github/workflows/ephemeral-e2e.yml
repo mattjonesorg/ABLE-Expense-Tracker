@@ -234,6 +234,22 @@ jobs:
           E2E_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
         run: npx playwright test --reporter=html
 
+      - name: Capture demo screenshots
+        if: success()
+        env:
+          DEMO_EMAIL: e2e-test@abletracker.local
+          DEMO_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          DEMO_URL: ${{ steps.outputs.outputs.website-url }}
+        run: node docs/demos/capture-screenshots.mjs
+
+      - name: Upload demo screenshots
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: demo-screenshots-pr-${{ env.PR_NUMBER }}
+          path: docs/demos/screenshots/
+          retention-days: 30
+
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v4
