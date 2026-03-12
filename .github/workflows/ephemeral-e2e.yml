@@ -28,6 +28,7 @@ jobs:
       user-pool-id: ${{ steps.outputs.outputs.user-pool-id }}
       client-id: ${{ steps.outputs.outputs.client-id }}
       table-name: ${{ steps.outputs.outputs.table-name }}
+      infra-ok: ${{ steps.infra-health.outputs.infra-ok }}
 
     steps:
       - name: Check required secrets
@@ -215,6 +216,11 @@ jobs:
 
           echo "API smoke test passed"
 
+      - name: Mark infrastructure as healthy
+        id: infra-health
+        if: success()
+        run: echo "infra-ok=true" >> "$GITHUB_OUTPUT"
+
       - name: Install Playwright browsers
         working-directory: web
         run: npx playwright install --with-deps chromium
@@ -285,7 +291,9 @@ jobs:
   cleanup-on-failure:
     runs-on: ubuntu-latest
     needs: deploy-and-test
-    if: failure()
+    # Only clean up when infrastructure steps failed (CDK deploy, seed, smoke test).
+    # When only Playwright tests fail, keep the environment alive for debugging.
+    if: ${{ failure() && needs.deploy-and-test.outputs.infra-ok != 'true' }}
     environment: dev
 
     steps:
