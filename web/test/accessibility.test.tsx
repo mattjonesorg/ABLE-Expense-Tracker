@@ -262,6 +262,7 @@ describe('Accessibility', () => {
       mockGetReimbursementSummaries.mockRejectedValue(
         new Error('Network error'),
       );
+      mockListExpenses.mockRejectedValue(new Error('Network error'));
       renderWithShell('/');
       await waitFor(() => {
         expect(screen.getByRole('alert')).toBeInTheDocument();

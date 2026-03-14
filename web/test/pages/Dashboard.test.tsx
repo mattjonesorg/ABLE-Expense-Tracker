@@ -258,14 +258,66 @@ describe('Dashboard Page', () => {
     });
   });
 
-  describe('Error handling', () => {
-    it('shows error message when reimbursement fetch fails', async () => {
+  describe('Error handling — partial failures (Promise.allSettled)', () => {
+    it('shows error banner only when BOTH API calls fail', async () => {
       mockGetReimbursementSummaries.mockRejectedValue(new Error('Network error'));
+      mockListExpenses.mockRejectedValue(new Error('Network error'));
 
       renderDashboard();
       await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeInTheDocument();
         expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
       });
+    });
+
+    it('shows expenses when only reimbursement summaries fail', async () => {
+      mockGetReimbursementSummaries.mockRejectedValue(new Error('Server error'));
+      mockListExpenses.mockResolvedValue(mockRecentExpenses());
+
+      renderDashboard();
+      await waitFor(() => {
+        expect(screen.getByText('Office Depot')).toBeInTheDocument();
+        expect(screen.getByText('Amazon')).toBeInTheDocument();
+      });
+      // No error banner
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('shows reimbursement data when only expenses fail', async () => {
+      mockGetReimbursementSummaries.mockResolvedValue(mockSummaries());
+      mockListExpenses.mockRejectedValue(new Error('Server error'));
+
+      renderDashboard();
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+        expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+      });
+      // No error banner
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('defaults summaries to empty array when summaries fail', async () => {
+      mockGetReimbursementSummaries.mockRejectedValue(new Error('fail'));
+      mockListExpenses.mockResolvedValue(mockRecentExpenses());
+
+      renderDashboard();
+      await waitFor(() => {
+        expect(screen.getByText('Office Depot')).toBeInTheDocument();
+      });
+      // Total unreimbursed should be $0.00 since summaries defaulted to []
+      expect(screen.queryByText('$195.50')).not.toBeInTheDocument();
+    });
+
+    it('defaults expenses to empty array when expenses fail', async () => {
+      mockGetReimbursementSummaries.mockResolvedValue(mockSummaries());
+      mockListExpenses.mockRejectedValue(new Error('fail'));
+
+      renderDashboard();
+      await waitFor(() => {
+        expect(screen.getByText('John Doe')).toBeInTheDocument();
+      });
+      // No recent expenses section
+      expect(screen.queryByText('Office Depot')).not.toBeInTheDocument();
     });
   });
 });
