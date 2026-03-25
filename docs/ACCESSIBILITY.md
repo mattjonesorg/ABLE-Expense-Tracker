@@ -50,6 +50,12 @@ An accessibility audit was conducted across all UI pages and components. The fol
 - **Remediation**: Added `aria-label` to both forms: "Sign in form" (Login), "New expense form" (ExpenseForm).
 - **WCAG criterion**: 1.3.1 Info and Relationships (A)
 
+#### 9. Date Picker Accessibility (Sprint 10)
+- **Finding**: `DateInput` components across Expenses, Reports, and ExpenseForm pages lacked explicit `aria-label` attributes. Placeholders showed generic text ("Start date", "End date", "Select date") instead of the expected date format, giving screen reader users no indication of how to type a date manually.
+- **Remediation**: Added `aria-label` with format hint (e.g., "From date, MM/DD/YYYY") to all DateInput components. Changed `placeholder` to "MM/DD/YYYY" so users can type dates directly as a fallback to the calendar popup. Added `valueFormat="MM/DD/YYYY"` for consistent display of selected dates.
+- **Affected files**: `Expenses.tsx`, `Reports.tsx`, `ExpenseForm.tsx`
+- **WCAG criteria**: 1.3.1 Info and Relationships (A), 3.3.2 Labels or Instructions (A)
+
 ### Items Already Correct (No Changes Needed)
 
 - `<html lang="en">` is set in `index.html`
@@ -65,11 +71,11 @@ An accessibility audit was conducted across all UI pages and components. The fol
 
 ## Known Limitations
 
-1. **No automated axe-core integration** -- The project does not yet include `@axe-core/react` for automated accessibility scanning in tests. This should be added as a future enhancement.
+1. ~~**No automated axe-core integration**~~ -- Resolved: `vitest-axe` is integrated in `web/test/accessibility.test.tsx` with axe-core scanning across all pages.
 2. **Color contrast not programmatically verified** -- Red amounts in the Reimbursements page (`c="red.6"`) and dimmed text (`c="dimmed"`) rely on Mantine's default theme colors, which generally meet WCAG AA contrast ratios, but have not been verified with a contrast checker tool against all backgrounds.
 3. **No screen reader testing** -- Fixes have been designed following WCAG best practices, but manual testing with NVDA, VoiceOver, or JAWS has not yet been performed.
 4. **PWA install prompt** -- The browser-native install prompt has not been evaluated for accessibility.
-5. **Date picker accessibility** -- Mantine's `DateInput` component provides basic keyboard support but the calendar popup may present challenges for screen reader users. This should be validated with manual testing.
+5. **Date picker calendar popup** -- While the `DateInput` text input is now fully accessible (see Finding 9 above), Mantine's calendar popup that opens on click may still have limited screen reader announcements for date grid navigation. The text input fallback (typing dates directly in MM/DD/YYYY format) provides a fully accessible alternative.
 
 ## Testing Approach
 
@@ -86,6 +92,9 @@ Accessibility-specific tests are in `web/test/accessibility.test.tsx` and cover:
 - Table accessible labels (`aria-label`)
 - Form accessible labels (`aria-label`)
 - Absence of mouse-only interactions on table rows
+- DateInput `aria-label` attributes with format hints
+- DateInput placeholder showing expected date format (MM/DD/YYYY)
+- DateInput renders as text input (allows typed date entry as screen reader fallback)
 
 ### Existing Tests with Accessibility Coverage
 
