@@ -240,7 +240,7 @@ export function ExpenseForm() {
               placeholder="0.00"
               withAsterisk
               aria-required="true"
-              prefix="$"
+              leftSection="$"
               decimalScale={2}
               fixedDecimalScale
               min={0}
