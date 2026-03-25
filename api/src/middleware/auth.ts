@@ -10,6 +10,7 @@ export interface TokenClaims {
   'custom:accountId': string;
   'custom:displayName': string;
   'custom:role': string;
+  'custom:accountType'?: string;
 }
 
 /**
@@ -21,6 +22,7 @@ export interface AuthContext {
   email: string;
   displayName: string;
   role: 'owner' | 'authorized_rep';
+  accountType: 'live' | 'test';
 }
 
 /**
@@ -131,12 +133,15 @@ export function createAuthMiddleware(
         return forbidden('Forbidden');
       }
 
+      const accountType = claims['custom:accountType'] === 'test' ? 'test' : 'live';
+
       const context: AuthContext = {
         userId: claims.sub,
         accountId,
         email: claims.email,
         displayName: claims['custom:displayName'],
         role: role as AuthContext['role'],
+        accountType,
       };
 
       return { success: true, context };
@@ -229,12 +234,15 @@ export function extractAuthContext(event: APIGatewayProxyEventV2): AuthResult {
   }
 
   // Build the authenticated context
+  const accountType = claims['custom:accountType'] === 'test' ? 'test' : 'live';
+
   const context: AuthContext = {
     userId: claims['sub'],
     accountId: claims['custom:accountId'],
     email: claims['email'],
     displayName: claims['custom:displayName'] ?? '',
     role: role as AuthContext['role'],
+    accountType,
   };
 
   return { success: true, context };

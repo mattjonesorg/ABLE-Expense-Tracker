@@ -36,6 +36,7 @@ export class AuthStack extends cdk.Stack {
       customAttributes: {
         role: new cognito.StringAttribute({ mutable: true }),
         accountId: new cognito.StringAttribute({ mutable: true }),
+        accountType: new cognito.StringAttribute({ mutable: false }),
       },
       removalPolicy,
     });
@@ -52,7 +53,7 @@ export class AuthStack extends cdk.Stack {
           email: true,
           emailVerified: true,
         })
-        .withCustomAttributes('role', 'accountId'),
+        .withCustomAttributes('role', 'accountId', 'accountType'),
       writeAttributes: new cognito.ClientAttributes()
         .withStandardAttributes({
           email: true,
