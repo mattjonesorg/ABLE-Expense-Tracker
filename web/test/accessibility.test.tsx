@@ -355,6 +355,62 @@ describe('Accessibility', () => {
     });
   });
 
+  describe('DateInput accessibility for screen reader users', () => {
+    it('Expenses page "From date" has an aria-label', () => {
+      renderWithShell('/expenses');
+      const fromInput = screen.getByRole('textbox', { name: /from date/i });
+      expect(fromInput).toBeInTheDocument();
+      expect(fromInput).toHaveAttribute('aria-label', 'From date, MM/DD/YYYY');
+    });
+
+    it('Expenses page "To date" has an aria-label', () => {
+      renderWithShell('/expenses');
+      const toInput = screen.getByRole('textbox', { name: /to date/i });
+      expect(toInput).toBeInTheDocument();
+      expect(toInput).toHaveAttribute('aria-label', 'To date, MM/DD/YYYY');
+    });
+
+    it('Reports page "From date" has an aria-label', () => {
+      renderWithShell('/reports');
+      const fromInput = screen.getByRole('textbox', { name: /from date/i });
+      expect(fromInput).toBeInTheDocument();
+      expect(fromInput).toHaveAttribute('aria-label', 'From date, MM/DD/YYYY');
+    });
+
+    it('Reports page "To date" has an aria-label', () => {
+      renderWithShell('/reports');
+      const toInput = screen.getByRole('textbox', { name: /to date/i });
+      expect(toInput).toBeInTheDocument();
+      expect(toInput).toHaveAttribute('aria-label', 'To date, MM/DD/YYYY');
+    });
+
+    it('ExpenseForm "Date" has an aria-label', () => {
+      renderWithShell('/expenses/new');
+      const dateInput = screen.getByRole('textbox', { name: /date/i });
+      expect(dateInput).toBeInTheDocument();
+      expect(dateInput).toHaveAttribute('aria-label', 'Expense date, MM/DD/YYYY');
+    });
+
+    it('DateInput placeholders show expected date format', () => {
+      renderWithShell('/expenses');
+      const fromInput = screen.getByRole('textbox', { name: /from date/i });
+      expect(fromInput).toHaveAttribute('placeholder', 'MM/DD/YYYY');
+    });
+
+    it('ExpenseForm DateInput shows date format placeholder', () => {
+      renderWithShell('/expenses/new');
+      const dateInput = screen.getByRole('textbox', { name: /date/i });
+      expect(dateInput).toHaveAttribute('placeholder', 'MM/DD/YYYY');
+    });
+
+    it('DateInput is a text input that accepts typed dates', () => {
+      renderWithShell('/expenses');
+      const fromInput = screen.getByRole('textbox', { name: /from date/i });
+      expect(fromInput.tagName).toBe('INPUT');
+      expect(fromInput).not.toHaveAttribute('type', 'date');
+    });
+  });
+
   describe('Clickable table rows are keyboard accessible', () => {
     it('Expenses table rows do not have misleading cursor or click handlers', async () => {
       renderWithShell('/expenses');

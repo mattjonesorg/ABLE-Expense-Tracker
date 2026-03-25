@@ -240,7 +240,7 @@ export function ExpenseForm() {
               placeholder="0.00"
               withAsterisk
               aria-required="true"
-              prefix="$"
+              leftSection="$"
               decimalScale={2}
               fixedDecimalScale
               min={0}
@@ -249,7 +249,9 @@ export function ExpenseForm() {
 
             <DateInput
               label="Date"
-              placeholder="Select date"
+              placeholder="MM/DD/YYYY"
+              aria-label="Expense date, MM/DD/YYYY"
+              valueFormat="MM/DD/YYYY"
               withAsterisk
               aria-required="true"
               maxDate={new Date()}

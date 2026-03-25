@@ -104,7 +104,9 @@ export function Expenses() {
           />
           <DateInput
             label="From date"
-            placeholder="Start date"
+            placeholder="MM/DD/YYYY"
+            aria-label="From date, MM/DD/YYYY"
+            valueFormat="MM/DD/YYYY"
             value={startDate}
             onChange={setStartDate}
             clearable
@@ -112,7 +114,9 @@ export function Expenses() {
           />
           <DateInput
             label="To date"
-            placeholder="End date"
+            placeholder="MM/DD/YYYY"
+            aria-label="To date, MM/DD/YYYY"
+            valueFormat="MM/DD/YYYY"
             value={endDate}
             onChange={setEndDate}
             clearable
