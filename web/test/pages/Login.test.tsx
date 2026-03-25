@@ -192,6 +192,36 @@ describe('Login Page', () => {
       expect(sessionStorage.getItem('returnTo')).toBeNull();
     });
 
+    it('rejects protocol-relative returnTo paths', async () => {
+      sessionStorage.setItem('returnTo', '//evil.com');
+
+      const user = userEvent.setup();
+      renderLogin();
+
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/');
+      });
+    });
+
+    it('rejects returnTo paths that do not start with /', async () => {
+      sessionStorage.setItem('returnTo', 'https://evil.com');
+
+      const user = userEvent.setup();
+      renderLogin();
+
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/');
+      });
+    });
+
     it('navigates to / when no returnTo is saved', async () => {
       const user = userEvent.setup();
       renderLogin();
