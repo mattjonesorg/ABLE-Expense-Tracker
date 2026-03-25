@@ -136,6 +136,14 @@ These are non-negotiable. Every agent must follow them. They are the guardrails 
 - Every PR references the GitHub issue it addresses
 - PRs require passing CI before merge
 
+### Worktree Cleanup
+
+Agent worktrees can become stale when agents finish or fail, leaving branch locks that block other agents from checking out or rebasing those branches.
+
+- **Before creating a new worktree**, always run `git worktree prune` to clean up stale references.
+- **After an agent finishes**, the worktree should be removed with `git worktree remove <path>`. If the worktree directory was already deleted, `git worktree prune` will clean up the dangling reference.
+- **Diagnosing stale worktrees**: Run `git worktree list` to see all active worktrees. If a listed worktree path no longer exists on disk, run `git worktree prune` to remove it.
+
 ## Agent Team
 
 This project uses a 12-agent team. See `.claude/agents/` for individual agent definitions.
