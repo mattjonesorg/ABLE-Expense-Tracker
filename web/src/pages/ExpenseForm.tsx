@@ -249,7 +249,9 @@ export function ExpenseForm() {
 
             <DateInput
               label="Date"
-              placeholder="Select date"
+              placeholder="MM/DD/YYYY"
+              aria-label="Expense date, MM/DD/YYYY"
+              valueFormat="MM/DD/YYYY"
               withAsterisk
               aria-required="true"
               maxDate={new Date()}
