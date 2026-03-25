@@ -66,6 +66,31 @@ These are non-negotiable. Every agent must follow them. They are the guardrails 
 - Test files live in `test/` directories mirroring `src/` structure.
 - Minimum coverage targets: 80% line coverage for `api/`, 70% for `web/`.
 
+### Known Testing Gotchas
+
+#### Mantine Select dual-label conflict
+
+Mantine v7's `Select` component renders both an `<input>` and a hidden `<ul role="listbox">` that share the same `aria-label`. This means `getByLabelText('Category')` matches two elements and the test fails with "Found multiple elements."
+
+**Wrong:**
+```ts
+screen.getByLabelText(/category/i); // Matches both <input> AND <ul role="listbox">
+```
+
+**Right:**
+```ts
+screen.getByRole('textbox', { name: /category/i }); // Targets only the <input>
+```
+
+This applies to any Mantine `Select` or searchable select — not just "Category". When querying a Mantine `Select` in tests, always use `getByRole('textbox', { name: /label/i })`.
+
+For complex test files, extract a helper to keep this consistent:
+```ts
+function getCategoryInput(): HTMLInputElement {
+  return screen.getByRole('textbox', { name: /category/i });
+}
+```
+
 ### TypeScript
 
 - Strict mode everywhere. `"strict": true` in all tsconfigs.
