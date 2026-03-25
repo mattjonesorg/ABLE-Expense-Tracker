@@ -66,6 +66,31 @@ These are non-negotiable. Every agent must follow them. They are the guardrails 
 - Test files live in `test/` directories mirroring `src/` structure.
 - Minimum coverage targets: 80% line coverage for `api/`, 70% for `web/`.
 
+### Known Testing Gotchas
+
+#### Mantine Select dual-label conflict
+
+Mantine v7's `Select` component renders both an `<input>` and a hidden `<ul role="listbox">` that share the same `aria-label`. This means `getByLabelText('Category')` matches two elements and the test fails with "Found multiple elements."
+
+**Wrong:**
+```ts
+screen.getByLabelText(/category/i); // Matches both <input> AND <ul role="listbox">
+```
+
+**Right:**
+```ts
+screen.getByRole('textbox', { name: /category/i }); // Targets only the <input>
+```
+
+This applies to any Mantine `Select` or searchable select — not just "Category". When querying a Mantine `Select` in tests, always use `getByRole('textbox', { name: /label/i })`.
+
+For complex test files, extract a helper to keep this consistent:
+```ts
+function getCategoryInput(): HTMLInputElement {
+  return screen.getByRole('textbox', { name: /category/i });
+}
+```
+
 ### TypeScript
 
 - Strict mode everywhere. `"strict": true` in all tsconfigs.
@@ -135,6 +160,14 @@ These are non-negotiable. Every agent must follow them. They are the guardrails 
 - Commit messages: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, `chore:`, `ci:`)
 - Every PR references the GitHub issue it addresses
 - PRs require passing CI before merge
+
+### Worktree Cleanup
+
+Agent worktrees can become stale when agents finish or fail, leaving branch locks that block other agents from checking out or rebasing those branches.
+
+- **Before creating a new worktree**, always run `git worktree prune` to clean up stale references.
+- **After an agent finishes**, the worktree should be removed with `git worktree remove <path>`. If the worktree directory was already deleted, `git worktree prune` will clean up the dangling reference.
+- **Diagnosing stale worktrees**: Run `git worktree list` to see all active worktrees. If a listed worktree path no longer exists on disk, run `git worktree prune` to remove it.
 
 ## Agent Team
 
