@@ -451,6 +451,17 @@ describe('ExpenseForm', () => {
       expect(getCategoryInput()).toBeInTheDocument();
     });
 
+    it('amount field displays a $ prefix', () => {
+      renderExpenseForm();
+      // The $ symbol should be visible as a left section on the Amount input
+      const amountInput = screen.getByLabelText(/amount/i);
+      const wrapper = amountInput.closest('.mantine-NumberInput-wrapper');
+      expect(wrapper).not.toBeNull();
+      const leftSection = wrapper!.querySelector('.mantine-NumberInput-section');
+      expect(leftSection).not.toBeNull();
+      expect(leftSection!.textContent).toBe('$');
+    });
+
     it('required fields are marked with aria-required', () => {
       renderExpenseForm();
 
