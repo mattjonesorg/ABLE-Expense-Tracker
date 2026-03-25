@@ -13,9 +13,9 @@ Refresh the product demo script (`docs/demos/product-demo.md`) with fresh screen
 
 ## Prerequisites
 
-- Playwright must be installed (`pnpm exec playwright install chromium` if needed)
+- For CI artifact download: `gh` CLI authenticated (preferred method)
+- For live capture: Playwright installed + `DEMO_EMAIL` and `DEMO_PASSWORD` environment variables set
 - For local capture: the Vite dev server will be started automatically by the capture script
-- For live capture: `DEMO_EMAIL` and `DEMO_PASSWORD` environment variables must be set
 
 ## Procedure
 
@@ -23,25 +23,38 @@ This skill coordinates three agents working sequentially:
 
 ### Phase 1: QA Engineer — Capture Screenshots
 
-The QA Engineer captures screenshots of all implemented features using Playwright.
+The QA Engineer obtains screenshots of all implemented features, preferring CI artifacts over local capture.
 
 **Steps:**
 
-1. Determine which capture script to use:
-   - **Local dev** (default, no credentials needed): `node docs/demos/capture-local-screenshots.mjs`
-   - **Live deployed environment** (requires credentials): `DEMO_EMAIL=<email> DEMO_PASSWORD=<pass> node docs/demos/capture-screenshots.mjs`
-2. Run the selected capture script from the repository root.
-3. Verify screenshots were written to `docs/demos/screenshots/`.
-4. Review each screenshot file — confirm they are non-empty and show the expected UI state.
-5. If any screenshots fail to capture, note which ones failed and why (e.g., selector not found, timeout).
+1. **Try CI artifacts first** (preferred — most accurate, captured against real ephemeral infrastructure):
+   a. Find the most recent successful `ephemeral-e2e` workflow run that produced screenshots:
+      ```bash
+      gh run list --workflow=ephemeral-e2e.yml --status=success --limit=5 --json databaseId,headBranch,conclusion,createdAt
+      ```
+   b. Download the `demo-screenshots-pr-*` artifact from that run:
+      ```bash
+      gh run download <run-id> --name 'demo-screenshots-pr-<number>' --dir docs/demos/screenshots/
+      ```
+   c. If the artifact downloads successfully, verify the files are present and non-empty, then skip to Phase 2.
 
-**Screenshot inventory (current as of Sprint 3):**
+2. **Fall back to live capture** (if no CI artifact is available or artifacts are stale):
+   - **Live deployed environment** (requires credentials): `DEMO_EMAIL=<email> DEMO_PASSWORD=<pass> node docs/demos/capture-screenshots.mjs`
+   - **Local dev** (no credentials needed, less accurate): `node docs/demos/capture-local-screenshots.mjs`
+   - Ensure Playwright is installed: `pnpm exec playwright install chromium`
+
+3. Run the selected capture method from the repository root.
+4. Verify screenshots were written to `docs/demos/screenshots/`.
+5. Review each screenshot file — confirm they are non-empty and show the expected UI state.
+6. If any screenshots fail to capture, note which ones failed and why (e.g., selector not found, timeout, no artifact).
+
+**Screenshot inventory (current as of Sprint 9):**
 
 | File | Feature |
 |------|---------|
 | `01-login-page.png` | Login form |
 | `02-auth-redirect.png` | Auth guard redirect |
-| `03-dashboard.png` | Dashboard with quick actions |
+| `03-dashboard.png` | Dashboard with reimbursements and recent expenses |
 | `04-navigation.png` | Sidebar navigation |
 | `05-expense-form.png` | Add Expense form (empty) |
 | `06-ai-categorization.png` | AI Suggest Category with filled fields |
@@ -49,6 +62,10 @@ The QA Engineer captures screenshots of all implemented features using Playwrigh
 | `08-expense-list-empty.png` | Expense list empty state |
 | `09-mobile-nav.png` | Mobile hamburger menu |
 | `10-logout.png` | Logout button hover state |
+| `11-reimbursements.png` | Reimbursements page with bulk selection |
+| `12-reports.png` | Reports page with filters and summaries |
+| `13-expense-filter.png` | Expense list with category/date filters |
+| `14-bulk-reimburse.png` | Bulk reimbursement selection state |
 
 When new features are implemented, add new screenshot entries to the capture script and this inventory.
 
