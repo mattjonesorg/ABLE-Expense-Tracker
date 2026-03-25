@@ -40,8 +40,12 @@ export function AppLayout() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
 
-  // Redirect to login if not authenticated
+  // Redirect to login if not authenticated, saving the requested path
   if (!isLoading && !isAuthenticated) {
+    const currentPath = location.pathname;
+    if (currentPath !== '/' && currentPath !== '/login') {
+      sessionStorage.setItem('returnTo', currentPath);
+    }
     return <Navigate to="/login" replace />;
   }
 

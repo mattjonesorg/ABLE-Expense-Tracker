@@ -36,7 +36,9 @@ export function Login() {
   const handleSubmit = async (values: LoginFormValues) => {
     try {
       await login(values.email, values.password);
-      navigate('/');
+      const returnTo = sessionStorage.getItem('returnTo');
+      sessionStorage.removeItem('returnTo');
+      navigate(returnTo ?? '/');
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Login failed. Please try again.';
