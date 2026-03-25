@@ -1,6 +1,6 @@
 # ABLE Tracker -- Product Demo
 
-> Last updated: Sprint 8, 2026-03-11
+> Last updated: Sprint 9, 2026-03-14
 
 ## What is ABLE Tracker?
 
@@ -98,6 +98,7 @@ The Dashboard is the landing page after login. It greets the user by name, provi
 - Each quick-action card is a clickable link that navigates to the corresponding page.
 - Reimbursement summaries are fetched from the `/dashboard/reimbursements` API endpoint.
 - Recent expenses are fetched from `/expenses` and trimmed to the 5 most recent.
+- The Dashboard uses `Promise.allSettled` so that a failure in one API call (summaries or expenses) does not take down the entire page. If only one call fails, the other section still displays data. An error banner only appears when both calls fail.
 - If no expenses exist, an empty state is shown with a link to add the first expense.
 
 **Verification:**
@@ -108,6 +109,8 @@ The Dashboard is the landing page after login. It greets the user by name, provi
 - [ ] Reimbursements section shows total unreimbursed amount
 - [ ] Per-person reimbursement cards show name, amount, and expense count
 - [ ] Recent Expenses section shows up to 5 expenses with vendor, date, and amount
+- [ ] If one API call fails (summaries or expenses), the other section still displays
+- [ ] Error banner only appears when both API calls fail
 - [ ] Empty state shows a friendly message with a link to add an expense
 
 ---
@@ -571,10 +574,6 @@ Clicking a table row in the expense list logs the expense ID to the console but 
 
 The app is responsive (sidebar collapses on narrow screens), but has not been optimized specifically for mobile touch targets, swipe gestures, or native-app-like interactions.
 
-### Dashboard Reimbursements Endpoint
-
-The `/dashboard/reimbursements` endpoint returns 501 (stub). The Dashboard shows "Failed to load dashboard data" for the reimbursements section. Per-person reimbursement data is available on the Reimbursements and Reports pages instead.
-
 ---
 
 ## How to Run This Demo
@@ -615,5 +614,6 @@ Every pull request automatically deploys an isolated AWS environment with its ow
 2. Frontend is built with the ephemeral environment's configuration and deployed to S3
 3. Test data is seeded (test user + sample expenses)
 4. Playwright E2E tests run against the ephemeral environment
-5. A PR comment is posted with links to the frontend and API
-6. On PR close, ephemeral stacks are automatically destroyed
+5. Demo screenshots are captured automatically after tests pass (uploaded as build artifacts)
+6. A PR comment is posted with links to the frontend and API
+7. On PR close, ephemeral stacks are automatically destroyed (unless only Playwright tests failed, in which case the environment is preserved for debugging)

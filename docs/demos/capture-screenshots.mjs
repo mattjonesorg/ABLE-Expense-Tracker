@@ -141,6 +141,14 @@ async function main() {
       // 03 — Dashboard
       // -------------------------------------------------------
       console.log('Capturing 03-dashboard...');
+      // Wait for dashboard data to load (skeletons replaced by real content)
+      try {
+        await page.waitForSelector('text=Recent Expenses', { timeout: 10000 });
+      } catch {
+        // If no expenses exist, wait for Quick Actions to be visible instead
+        await page.waitForSelector('text=Quick Actions', { timeout: 5000 });
+      }
+      await page.waitForTimeout(500); // let rendering settle
       await page.screenshot({
         path: path.join(SCREENSHOTS_DIR, '03-dashboard.png'),
         fullPage: false,
