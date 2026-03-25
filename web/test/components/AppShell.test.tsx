@@ -7,6 +7,7 @@ import { AppLayout } from '../../src/components/AppShell';
 
 const mockLogout = vi.fn();
 const mockNavigate = vi.fn();
+let mockIsAuthenticated = true;
 
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
@@ -18,13 +19,15 @@ vi.mock('react-router-dom', async () => {
 
 vi.mock('../../src/lib/auth', () => ({
   useAuth: () => ({
-    isAuthenticated: true,
-    user: {
-      email: 'matt@example.com',
-      displayName: 'matt',
-      accountId: 'acct_001',
-      role: 'owner',
-    },
+    isAuthenticated: mockIsAuthenticated,
+    user: mockIsAuthenticated
+      ? {
+          email: 'matt@example.com',
+          displayName: 'matt',
+          accountId: 'acct_001',
+          role: 'owner',
+        }
+      : null,
     isLoading: false,
     login: vi.fn(),
     logout: mockLogout,
@@ -50,6 +53,8 @@ function renderAppShell(initialRoute = '/') {
 describe('AppShell (AppLayout)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIsAuthenticated = true;
+    sessionStorage.clear();
   });
 
   describe('Header', () => {
@@ -161,6 +166,65 @@ describe('AppShell (AppLayout)', () => {
     it('main content area is a main landmark', () => {
       renderAppShell();
       expect(screen.getByRole('main')).toBeInTheDocument();
+    });
+  });
+
+  describe('Return-to-URL (#81)', () => {
+    it('saves current path to sessionStorage when redirecting unauthenticated user', () => {
+      mockIsAuthenticated = false;
+
+      render(
+        <MantineProvider>
+          <MemoryRouter initialEntries={['/expenses']}>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="/expenses" element={<div>Expenses Page</div>} />
+              </Route>
+              <Route path="/login" element={<div>Login Page</div>} />
+            </Routes>
+          </MemoryRouter>
+        </MantineProvider>,
+      );
+
+      expect(sessionStorage.getItem('returnTo')).toBe('/expenses');
+    });
+
+    it('does not save /login as the return path', () => {
+      mockIsAuthenticated = false;
+
+      render(
+        <MantineProvider>
+          <MemoryRouter initialEntries={['/login']}>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="/" element={<div>Dashboard</div>} />
+              </Route>
+              <Route path="/login" element={<div>Login Page</div>} />
+            </Routes>
+          </MemoryRouter>
+        </MantineProvider>,
+      );
+
+      expect(sessionStorage.getItem('returnTo')).toBeNull();
+    });
+
+    it('does not save / as the return path', () => {
+      mockIsAuthenticated = false;
+
+      render(
+        <MantineProvider>
+          <MemoryRouter initialEntries={['/']}>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="/" element={<div>Dashboard</div>} />
+              </Route>
+              <Route path="/login" element={<div>Login Page</div>} />
+            </Routes>
+          </MemoryRouter>
+        </MantineProvider>,
+      );
+
+      expect(sessionStorage.getItem('returnTo')).toBeNull();
     });
   });
 });

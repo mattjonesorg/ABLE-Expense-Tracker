@@ -49,6 +49,7 @@ describe('Login Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogin.mockResolvedValue(undefined);
+    sessionStorage.clear();
   });
 
   it('renders email input and password input', () => {
@@ -156,6 +157,82 @@ describe('Login Page', () => {
 
     await waitFor(() => {
       expect(mockLogin).toHaveBeenCalledWith('test@example.com', 'password123');
+    });
+  });
+
+  describe('Return-to-URL (#81)', () => {
+    it('navigates to saved returnTo path after login', async () => {
+      sessionStorage.setItem('returnTo', '/expenses');
+
+      const user = userEvent.setup();
+      renderLogin();
+
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/expenses');
+      });
+    });
+
+    it('clears returnTo from sessionStorage after use', async () => {
+      sessionStorage.setItem('returnTo', '/expenses');
+
+      const user = userEvent.setup();
+      renderLogin();
+
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalled();
+      });
+      expect(sessionStorage.getItem('returnTo')).toBeNull();
+    });
+
+    it('rejects protocol-relative returnTo paths', async () => {
+      sessionStorage.setItem('returnTo', '//evil.com');
+
+      const user = userEvent.setup();
+      renderLogin();
+
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/');
+      });
+    });
+
+    it('rejects returnTo paths that do not start with /', async () => {
+      sessionStorage.setItem('returnTo', 'https://evil.com');
+
+      const user = userEvent.setup();
+      renderLogin();
+
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/');
+      });
+    });
+
+    it('navigates to / when no returnTo is saved', async () => {
+      const user = userEvent.setup();
+      renderLogin();
+
+      await user.type(screen.getByLabelText(/email/i), 'test@example.com');
+      await user.type(screen.getByLabelText(/password/i), 'password123');
+      await user.click(screen.getByRole('button', { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockNavigate).toHaveBeenCalledWith('/');
+      });
     });
   });
 });

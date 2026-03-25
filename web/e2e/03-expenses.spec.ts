@@ -117,7 +117,7 @@ test.describe('Create Expense', () => {
     // The new expense should appear in the table
     const table = page.getByRole('table', { name: 'Expense list' });
     await expect(table).toBeVisible({ timeout: 15_000 });
-    await expect(table.getByText(`E2E Pharmacy ${suffix}`)).toBeVisible();
+    await expect(table.getByText(`E2E Pharmacy ${suffix}`).first()).toBeVisible();
   });
 
   test('Suggest Category button works with vendor and description', async ({ page }) => {

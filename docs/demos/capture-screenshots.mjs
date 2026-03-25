@@ -91,6 +91,9 @@ async function main() {
     // -------------------------------------------------------
     console.log('Logging in...');
     await page.goto(`${APP_URL}/login`, { waitUntil: 'networkidle' });
+    // Clear returnTo set by the auth-redirect screenshot (step 02)
+    // so login lands on the Dashboard for subsequent captures
+    await page.evaluate(() => sessionStorage.removeItem('returnTo'));
     await page.waitForSelector('input[type="email"]', { timeout: 10000 });
     await page.fill('input[type="email"]', EMAIL);
     await page.fill('input[type="password"]', PASSWORD);
