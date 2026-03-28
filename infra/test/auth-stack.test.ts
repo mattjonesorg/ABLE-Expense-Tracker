@@ -128,6 +128,42 @@ describe('AuthStack', () => {
     });
   });
 
+  describe('Ephemeral stacks', () => {
+    let ephemeralTemplate: Template;
+
+    beforeAll(() => {
+      const app = new cdk.App();
+      const stack = new AuthStack(app, 'EphemeralAuthStack', { ephemeral: true });
+      ephemeralTemplate = Template.fromStack(stack);
+    });
+
+    it('does not create Google Identity Provider when ephemeral', () => {
+      const providers = ephemeralTemplate.findResources('AWS::Cognito::UserPoolIdentityProvider');
+      expect(Object.keys(providers)).toHaveLength(0);
+    });
+
+    it('does not create UserPoolDomain when ephemeral', () => {
+      const domains = ephemeralTemplate.findResources('AWS::Cognito::UserPoolDomain');
+      expect(Object.keys(domains)).toHaveLength(0);
+    });
+
+    it('does not include Google in SupportedIdentityProviders when ephemeral', () => {
+      ephemeralTemplate.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        SupportedIdentityProviders: Match.not(
+          Match.arrayWith(['Google']),
+        ),
+      });
+    });
+
+    it('does not include OAuth callback URLs when ephemeral', () => {
+      ephemeralTemplate.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        CallbackURLs: Match.not(
+          Match.arrayWith(['https://d360ri42g0q6k2.cloudfront.net/auth/callback']),
+        ),
+      });
+    });
+  });
+
   describe('Google Identity Provider', () => {
     it('creates a Google identity provider with openid, email, profile scopes', () => {
       template.hasResourceProperties('AWS::Cognito::UserPoolIdentityProvider', {
