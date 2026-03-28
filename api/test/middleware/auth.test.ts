@@ -477,6 +477,52 @@ describe('createAuthMiddleware', () => {
     });
   });
 
+  describe('accountType extraction', () => {
+    it('extracts accountType from custom:accountType claim', async () => {
+      const claimsWithAccountType: TokenClaims = {
+        ...validClaims,
+        'custom:accountType': 'test',
+      };
+      const verifier = vi.fn<TokenVerifier>().mockResolvedValue(claimsWithAccountType);
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer valid-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(true);
+      const ctx = (result as Extract<AuthResult, { success: true }>).context;
+      expect(ctx.accountType).toBe('test');
+    });
+
+    it('defaults accountType to "live" when custom:accountType claim is missing', async () => {
+      const verifier = vi.fn<TokenVerifier>().mockResolvedValue(validClaims);
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer valid-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(true);
+      const ctx = (result as Extract<AuthResult, { success: true }>).context;
+      expect(ctx.accountType).toBe('live');
+    });
+
+    it('sets accountType to "live" when custom:accountType claim is "live"', async () => {
+      const claimsWithLive: TokenClaims = {
+        ...validClaims,
+        'custom:accountType': 'live',
+      };
+      const verifier = vi.fn<TokenVerifier>().mockResolvedValue(claimsWithLive);
+      const middleware = createAuthMiddleware(verifier);
+
+      const event = makeEvent({ authorization: 'Bearer valid-token' });
+      const result = await middleware(event);
+
+      expect(result.success).toBe(true);
+      const ctx = (result as Extract<AuthResult, { success: true }>).context;
+      expect(ctx.accountType).toBe('live');
+    });
+  });
+
   describe('case-insensitive header handling', () => {
     it('handles lowercase authorization header', async () => {
       const verifier = vi.fn<TokenVerifier>().mockResolvedValue(validClaims);
@@ -584,6 +630,43 @@ describe('extractAuthContext', () => {
       expect(result.success).toBe(true);
       const ctx = (result as Extract<AuthResult, { success: true }>).context;
       expect(ctx.role).toBe('authorized_rep');
+    });
+  });
+
+  describe('accountType extraction', () => {
+    it('extracts accountType from custom:accountType claim', () => {
+      const claims = {
+        ...validAuthorizerClaims,
+        'custom:accountType': 'test',
+      };
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(true);
+      const ctx = (result as Extract<AuthResult, { success: true }>).context;
+      expect(ctx.accountType).toBe('test');
+    });
+
+    it('defaults accountType to "live" when custom:accountType claim is missing', () => {
+      const event = makeEventWithAuthorizer(validAuthorizerClaims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(true);
+      const ctx = (result as Extract<AuthResult, { success: true }>).context;
+      expect(ctx.accountType).toBe('live');
+    });
+
+    it('sets accountType to "live" when custom:accountType claim is "live"', () => {
+      const claims = {
+        ...validAuthorizerClaims,
+        'custom:accountType': 'live',
+      };
+      const event = makeEventWithAuthorizer(claims);
+      const result = extractAuthContext(event);
+
+      expect(result.success).toBe(true);
+      const ctx = (result as Extract<AuthResult, { success: true }>).context;
+      expect(ctx.accountType).toBe('live');
     });
   });
 

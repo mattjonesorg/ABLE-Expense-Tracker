@@ -8,22 +8,10 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { ulid } from 'ulid';
 import type { AbleCategory, CreateExpenseInput, Expense, ListExpensesFilters } from './types.js';
+import { stripDynamoKeys } from './dynamo-utils.js';
 
-/** Key attributes stored on every DynamoDB item but not part of the Expense domain model. */
-const KEY_ATTRIBUTES = ['PK', 'SK', 'GSI1PK', 'GSI1SK', 'GSI2PK', 'GSI2SK'] as const;
-
-/**
- * Strip DynamoDB key attributes from a raw item and return a clean Expense object.
- */
-function itemToExpense(item: Record<string, unknown>): Expense {
-  const clean: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(item)) {
-    if (!(KEY_ATTRIBUTES as readonly string[]).includes(key)) {
-      clean[key] = value;
-    }
-  }
-  return clean as unknown as Expense;
-}
+/** Key attributes stored on every DynamoDB expense item but not part of the domain model. */
+const EXPENSE_KEY_ATTRIBUTES = ['PK', 'SK', 'GSI1PK', 'GSI1SK', 'GSI2PK', 'GSI2SK'] as const;
 
 /**
  * Repository for ABLE Tracker expense items stored in a DynamoDB single-table design.
@@ -103,7 +91,7 @@ export class ExpenseRepository {
       return null;
     }
 
-    return itemToExpense(items[0] as Record<string, unknown>);
+    return stripDynamoKeys<Expense>(items[0] as Record<string, unknown>, EXPENSE_KEY_ATTRIBUTES);
   }
 
   /**
@@ -134,7 +122,7 @@ export class ExpenseRepository {
     );
 
     const items = result.Items ?? [];
-    return items.map((item) => itemToExpense(item as Record<string, unknown>));
+    return items.map((item) => stripDynamoKeys<Expense>(item as Record<string, unknown>, EXPENSE_KEY_ATTRIBUTES));
   }
 
   /**
@@ -155,7 +143,7 @@ export class ExpenseRepository {
     );
 
     const items = result.Items ?? [];
-    return items.map((item) => itemToExpense(item as Record<string, unknown>));
+    return items.map((item) => stripDynamoKeys<Expense>(item as Record<string, unknown>, EXPENSE_KEY_ATTRIBUTES));
   }
 
   /**
@@ -182,7 +170,7 @@ export class ExpenseRepository {
     );
 
     const items = result.Items ?? [];
-    return items.map((item) => itemToExpense(item as Record<string, unknown>));
+    return items.map((item) => stripDynamoKeys<Expense>(item as Record<string, unknown>, EXPENSE_KEY_ATTRIBUTES));
   }
 
   /**
@@ -218,7 +206,7 @@ export class ExpenseRepository {
       }),
     );
 
-    return itemToExpense(result.Attributes as Record<string, unknown>);
+    return stripDynamoKeys<Expense>(result.Attributes as Record<string, unknown>, EXPENSE_KEY_ATTRIBUTES);
   }
 
   /**
