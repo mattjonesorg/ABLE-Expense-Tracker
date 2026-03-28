@@ -6,6 +6,8 @@ import {
   loadTokens,
   clearTokens,
   isTokenExpired,
+  buildGoogleAuthorizeUrl,
+  exchangeCodeForTokens,
   type CognitoTokens,
 } from '../../src/lib/cognito';
 
@@ -261,6 +263,128 @@ describe('cognito', () => {
       await expect(
         authenticateUser('user@test.com', 'mock-temp-password'),
       ).rejects.toThrow(/NEW_PASSWORD_REQUIRED/);
+    });
+  });
+
+  describe('buildGoogleAuthorizeUrl', () => {
+    beforeEach(() => {
+      vi.stubEnv(
+        'VITE_COGNITO_DOMAIN',
+        'https://test.auth.us-east-1.amazoncognito.com',
+      );
+      vi.stubEnv('VITE_GOOGLE_IDP_ENABLED', 'true');
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('builds correct authorize URL with all required params', () => {
+      const url = buildGoogleAuthorizeUrl(
+        'https://app.example.com/auth/callback',
+        'test-code-challenge',
+        'test-state-value',
+      );
+
+      const parsed = new URL(url);
+      expect(parsed.pathname).toBe('/oauth2/authorize');
+      expect(parsed.searchParams.get('response_type')).toBe('code');
+      expect(parsed.searchParams.get('client_id')).toBeTruthy();
+      expect(parsed.searchParams.get('redirect_uri')).toBe(
+        'https://app.example.com/auth/callback',
+      );
+      expect(parsed.searchParams.get('identity_provider')).toBe('Google');
+      expect(parsed.searchParams.get('scope')).toBe('openid email profile');
+      expect(parsed.searchParams.get('code_challenge')).toBe(
+        'test-code-challenge',
+      );
+      expect(parsed.searchParams.get('code_challenge_method')).toBe('S256');
+      expect(parsed.searchParams.get('state')).toBe('test-state-value');
+    });
+
+    it('uses the cognitoDomain from config', () => {
+      const url = buildGoogleAuthorizeUrl(
+        'https://app.example.com/auth/callback',
+        'challenge',
+        'state',
+      );
+
+      expect(url).toContain(
+        'https://test.auth.us-east-1.amazoncognito.com/oauth2/authorize',
+      );
+    });
+  });
+
+  describe('exchangeCodeForTokens', () => {
+    const originalFetch = globalThis.fetch;
+
+    beforeEach(() => {
+      vi.stubEnv(
+        'VITE_COGNITO_DOMAIN',
+        'https://test.auth.us-east-1.amazoncognito.com',
+      );
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+      vi.unstubAllEnvs();
+    });
+
+    it('POSTs to /oauth2/token with correct body and returns tokens', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            id_token: 'mock-id-token',
+            access_token: 'mock-access-token',
+            refresh_token: 'mock-refresh-token',
+          }),
+      });
+
+      const tokens = await exchangeCodeForTokens(
+        'auth-code-123',
+        'https://app.example.com/auth/callback',
+        'test-code-verifier',
+      );
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+
+      const [url, options] = (globalThis.fetch as ReturnType<typeof vi.fn>)
+        .mock.calls[0] as [string, RequestInit];
+      expect(url).toContain('/oauth2/token');
+
+      const headers = options.headers as Record<string, string>;
+      expect(headers['Content-Type']).toBe(
+        'application/x-www-form-urlencoded',
+      );
+
+      const body = new URLSearchParams(options.body as string);
+      expect(body.get('grant_type')).toBe('authorization_code');
+      expect(body.get('client_id')).toBeTruthy();
+      expect(body.get('code')).toBe('auth-code-123');
+      expect(body.get('redirect_uri')).toBe(
+        'https://app.example.com/auth/callback',
+      );
+      expect(body.get('code_verifier')).toBe('test-code-verifier');
+
+      expect(tokens.idToken).toBe('mock-id-token');
+      expect(tokens.accessToken).toBe('mock-access-token');
+      expect(tokens.refreshToken).toBe('mock-refresh-token');
+    });
+
+    it('throws on non-200 response', async () => {
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+        json: () => Promise.resolve({ error: 'invalid_grant' }),
+      });
+
+      await expect(
+        exchangeCodeForTokens(
+          'bad-code',
+          'https://app.example.com/auth/callback',
+          'test-verifier',
+        ),
+      ).rejects.toThrow('Failed to exchange authorization code');
     });
   });
 });

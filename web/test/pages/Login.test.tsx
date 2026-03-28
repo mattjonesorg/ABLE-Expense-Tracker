@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -8,6 +9,7 @@ import { Login } from '../../src/pages/Login';
 import { AuthProvider } from '../../src/lib/auth';
 
 const mockLogin = vi.fn();
+const mockLoginWithGoogle = vi.fn();
 const mockNavigate = vi.fn();
 
 vi.mock('react-router-dom', async () => {
@@ -18,19 +20,34 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-vi.mock('../../src/lib/auth', async () => {
-  const actual = await vi.importActual('../../src/lib/auth');
-  return {
-    ...actual,
-    useAuth: () => ({
-      isAuthenticated: false,
-      user: null,
-      isLoading: false,
-      login: mockLogin,
-      logout: vi.fn(),
-    }),
-  };
-});
+let googleIdpEnabled = false;
+
+vi.mock('../../src/lib/auth', () => ({
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+  useAuth: () => ({
+    isAuthenticated: false,
+    user: null,
+    isLoading: false,
+    login: mockLogin,
+    logout: vi.fn(),
+    loginWithGoogle: mockLoginWithGoogle,
+    handleOAuthCallback: vi.fn(),
+  }),
+}));
+
+vi.mock('../../src/lib/config', () => ({
+  getCognitoConfig: () => ({
+    userPoolId: 'us-east-1_TestPool',
+    clientId: 'test-client-id',
+    region: 'us-east-1',
+    cognitoEndpoint: 'https://cognito-idp.us-east-1.amazonaws.com/',
+    cognitoDomain: 'https://test.auth.us-east-1.amazoncognito.com',
+    get googleIdpEnabled() {
+      return googleIdpEnabled;
+    },
+  }),
+  API_URL: 'https://test.example.com',
+}));
 
 function renderLogin() {
   return render(
@@ -49,6 +66,7 @@ describe('Login Page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockLogin.mockResolvedValue(undefined);
+    googleIdpEnabled = false;
     sessionStorage.clear();
   });
 
@@ -233,6 +251,45 @@ describe('Login Page', () => {
       await waitFor(() => {
         expect(mockNavigate).toHaveBeenCalledWith('/');
       });
+    });
+  });
+
+  describe('Google OAuth', () => {
+    it('does NOT render Google sign-in button when googleIdpEnabled is false', () => {
+      googleIdpEnabled = false;
+      renderLogin();
+
+      expect(
+        screen.queryByRole('button', { name: /sign in with google/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('renders Google sign-in button when googleIdpEnabled is true', () => {
+      googleIdpEnabled = true;
+      renderLogin();
+
+      expect(
+        screen.getByRole('button', { name: /sign in with google/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('calls loginWithGoogle when Google button is clicked', async () => {
+      googleIdpEnabled = true;
+      const user = userEvent.setup();
+      renderLogin();
+
+      await user.click(
+        screen.getByRole('button', { name: /sign in with google/i }),
+      );
+
+      expect(mockLoginWithGoogle).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders divider between form and Google button when enabled', () => {
+      googleIdpEnabled = true;
+      renderLogin();
+
+      expect(screen.getByText('or')).toBeInTheDocument();
     });
   });
 });

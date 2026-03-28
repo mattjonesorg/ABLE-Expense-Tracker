@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './lib/auth';
 import { AppLayout } from './components/AppShell';
 import { Login } from './pages/Login';
+import { OAuthCallback } from './pages/OAuthCallback';
 import { Dashboard } from './pages/Dashboard';
 import { Expenses } from './pages/Expenses';
 import { ExpenseForm } from './pages/ExpenseForm';
@@ -15,6 +16,7 @@ export function App() {
         <Routes>
           {/* Login page — no AppShell wrapper */}
           <Route path="/login" element={<Login />} />
+          <Route path="/auth/callback" element={<OAuthCallback />} />
 
           {/* Protected routes — wrapped in AppShell */}
           <Route element={<AppLayout />}>

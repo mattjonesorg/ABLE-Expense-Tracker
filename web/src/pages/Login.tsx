@@ -6,11 +6,14 @@ import {
   Title,
   Container,
   Stack,
+  Divider,
 } from '@mantine/core';
 import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import { useNavigate } from 'react-router-dom';
+import { IconBrandGoogle } from '@tabler/icons-react';
 import { useAuth } from '../lib/auth';
+import { getCognitoConfig } from '../lib/config';
 
 interface LoginFormValues {
   email: string;
@@ -18,8 +21,9 @@ interface LoginFormValues {
 }
 
 export function Login() {
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const { googleIdpEnabled } = getCognitoConfig();
 
   const form = useForm<LoginFormValues>({
     initialValues: {
@@ -83,6 +87,19 @@ export function Login() {
             </Button>
           </Stack>
         </form>
+        {googleIdpEnabled && (
+          <>
+            <Divider label="or" labelPosition="center" my="lg" />
+            <Button
+              variant="default"
+              fullWidth
+              leftSection={<IconBrandGoogle size={18} />}
+              onClick={loginWithGoogle}
+            >
+              Sign in with Google
+            </Button>
+          </>
+        )}
       </Paper>
     </Container>
   );

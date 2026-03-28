@@ -21,6 +21,10 @@ export interface CognitoConfig {
   region: string;
   /** Full Cognito IDP endpoint URL */
   cognitoEndpoint: string;
+  /** Cognito hosted UI domain (e.g., https://myapp.auth.us-east-1.amazoncognito.com) */
+  cognitoDomain: string;
+  /** Whether Google Identity Provider is enabled */
+  googleIdpEnabled: boolean;
 }
 
 /**
@@ -41,6 +45,15 @@ function requireEnv(name: string): string {
 }
 
 /**
+ * Reads an optional VITE_* environment variable.
+ * Returns the value if set and non-empty, otherwise returns the default.
+ */
+function optionalEnv(name: string, defaultValue: string = ''): string {
+  const value = import.meta.env[name] as string | undefined;
+  return value && value.trim() !== '' ? value : defaultValue;
+}
+
+/**
  * Returns the Cognito configuration, reading from VITE_* environment
  * variables. Throws if any required variable is missing.
  */
@@ -48,12 +61,17 @@ export function getCognitoConfig(): CognitoConfig {
   const userPoolId = requireEnv('VITE_COGNITO_USER_POOL_ID');
   const clientId = requireEnv('VITE_COGNITO_CLIENT_ID');
   const region = requireEnv('VITE_AWS_REGION');
+  const googleIdpEnabled =
+    optionalEnv('VITE_GOOGLE_IDP_ENABLED') === 'true';
+  const cognitoDomain = optionalEnv('VITE_COGNITO_DOMAIN');
 
   return {
     userPoolId,
     clientId,
     region,
     cognitoEndpoint: `https://cognito-idp.${region}.amazonaws.com/`,
+    cognitoDomain,
+    googleIdpEnabled,
   };
 }
 
