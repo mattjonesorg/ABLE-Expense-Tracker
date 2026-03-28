@@ -13,6 +13,9 @@ import {
   loadTokens,
   clearTokens,
   isTokenExpired,
+  buildGoogleAuthorizeUrl,
+  exchangeCodeForTokens,
+  generatePkceChallenge,
 } from './cognito';
 
 export interface AuthUser {
@@ -32,6 +35,8 @@ export interface AuthState {
 export interface AuthActions {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  loginWithGoogle: () => Promise<void>;
+  handleOAuthCallback: (code: string, state: string) => Promise<void>;
 }
 
 type AuthContextValue = AuthState & AuthActions;
@@ -122,8 +127,70 @@ export function AuthProvider({ children }: AuthProviderProps) {
     });
   }, []);
 
+  const loginWithGoogle = useCallback(async () => {
+    const { codeVerifier, codeChallenge } = await generatePkceChallenge();
+    const oauthState = crypto.randomUUID();
+
+    sessionStorage.setItem('oauth_code_verifier', codeVerifier);
+    sessionStorage.setItem('oauth_state', oauthState);
+
+    const redirectUri = `${window.location.origin}/auth/callback`;
+    const authorizeUrl = buildGoogleAuthorizeUrl(
+      redirectUri,
+      codeChallenge,
+      oauthState,
+    );
+
+    window.location.href = authorizeUrl;
+  }, []);
+
+  const handleOAuthCallback = useCallback(
+    async (code: string, oauthState: string) => {
+      const storedState = sessionStorage.getItem('oauth_state');
+      if (oauthState !== storedState) {
+        throw new Error(
+          'OAuth state mismatch — possible CSRF attack. Please try again.',
+        );
+      }
+
+      const codeVerifier = sessionStorage.getItem('oauth_code_verifier');
+      if (!codeVerifier) {
+        throw new Error('Missing PKCE code verifier. Please try again.');
+      }
+
+      const redirectUri = `${window.location.origin}/auth/callback`;
+      const tokens = await exchangeCodeForTokens(
+        code,
+        redirectUri,
+        codeVerifier,
+      );
+
+      // Clear OAuth session values
+      sessionStorage.removeItem('oauth_state');
+      sessionStorage.removeItem('oauth_code_verifier');
+
+      storeTokens(tokens);
+      const userInfo = parseIdToken(tokens.idToken);
+
+      setState({
+        isAuthenticated: true,
+        user: {
+          email: userInfo.email,
+          displayName: userInfo.displayName,
+          accountId: userInfo.accountId,
+          role: userInfo.role,
+          cognitoSub: userInfo.sub,
+        },
+        isLoading: false,
+      });
+    },
+    [],
+  );
+
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider
+      value={{ ...state, login, logout, loginWithGoogle, handleOAuthCallback }}
+    >
       {children}
     </AuthContext.Provider>
   );

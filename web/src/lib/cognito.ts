@@ -183,6 +183,103 @@ export function clearTokens(): void {
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
+// ---- PKCE Helpers ----
+
+/**
+ * Generate a random code verifier string (64 hex chars, URL-safe).
+ * Uses crypto.getRandomValues for secure randomness.
+ */
+function generateCodeVerifier(): string {
+  const array = new Uint8Array(32);
+  crypto.getRandomValues(array);
+  return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Generate a SHA-256 code challenge from a code verifier (S256 method).
+ */
+async function generateCodeChallengeFromVerifier(
+  verifier: string,
+): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  const base64 = btoa(String.fromCharCode(...new Uint8Array(digest)));
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/**
+ * Generate a PKCE code verifier and its S256 code challenge.
+ */
+export async function generatePkceChallenge(): Promise<{
+  codeVerifier: string;
+  codeChallenge: string;
+}> {
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallengeFromVerifier(codeVerifier);
+  return { codeVerifier, codeChallenge };
+}
+
+// ---- OAuth / Google Sign-In ----
+
+/**
+ * Build the Cognito hosted UI authorize URL for Google sign-in.
+ */
+export function buildGoogleAuthorizeUrl(
+  redirectUri: string,
+  codeChallenge: string,
+  state: string,
+): string {
+  const config = getCognitoConfig();
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: config.clientId,
+    redirect_uri: redirectUri,
+    identity_provider: 'Google',
+    scope: 'openid email profile',
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
+    state,
+  });
+  return `${config.cognitoDomain}/oauth2/authorize?${params.toString()}`;
+}
+
+/**
+ * Exchange an authorization code for Cognito tokens using the /oauth2/token endpoint.
+ */
+export async function exchangeCodeForTokens(
+  code: string,
+  redirectUri: string,
+  codeVerifier: string,
+): Promise<CognitoTokens> {
+  const config = getCognitoConfig();
+  const body = new URLSearchParams({
+    grant_type: 'authorization_code',
+    client_id: config.clientId,
+    code,
+    redirect_uri: redirectUri,
+    code_verifier: codeVerifier,
+  });
+  const response = await fetch(`${config.cognitoDomain}/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString(),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to exchange authorization code');
+  }
+  const data = (await response.json()) as {
+    id_token: string;
+    access_token: string;
+    refresh_token: string;
+  };
+  return {
+    idToken: data.id_token,
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+  };
+}
+
 // ---- Authentication ----
 
 /**
