@@ -162,9 +162,19 @@ function createTestUser() {
       `--message-action SUPPRESS`,
     );
   } catch (err) {
-    // If user already exists, continue (idempotent)
+    // If user already exists, delete and recreate to ensure all attributes
+    // (including immutable ones like accountType) are set correctly.
     if (err.stderr && err.stderr.includes('UsernameExistsException')) {
-      console.log('  User already exists, continuing...');
+      console.log('  User already exists, deleting and recreating...');
+      awsCli(
+        `cognito-idp admin-delete-user --user-pool-id "${USER_POOL_ID}" --username "${E2E_EMAIL}"`,
+      );
+      awsCli(
+        `cognito-idp admin-create-user --user-pool-id "${USER_POOL_ID}" --username "${E2E_EMAIL}" ` +
+        `--temporary-password "${E2E_PASSWORD}" ` +
+        `--user-attributes Name=email,Value="${E2E_EMAIL}" Name=email_verified,Value=true Name=custom:role,Value=owner Name=custom:accountId,Value=ACCT-E2E-TEST Name=custom:accountType,Value=test ` +
+        `--message-action SUPPRESS`,
+      );
     } else {
       throw err;
     }
