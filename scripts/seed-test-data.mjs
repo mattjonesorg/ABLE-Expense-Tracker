@@ -136,6 +136,7 @@ function verifyCognitoUser() {
     { field: 'email', expected: E2E_EMAIL, actual: attrs.email },
     { field: 'custom:role', expected: 'owner', actual: attrs['custom:role'] },
     { field: 'custom:accountId', expected: 'ACCT-E2E-TEST', actual: attrs['custom:accountId'] },
+    { field: 'custom:accountType', expected: 'test', actual: attrs['custom:accountType'] },
   ];
 
   const mismatches = checks.filter((c) => c.expected !== c.actual);
@@ -147,7 +148,7 @@ function verifyCognitoUser() {
     process.exit(1);
   }
 
-  console.log(`  Verified: user=${E2E_EMAIL}, role=owner, accountId=ACCT-E2E-TEST`);
+  console.log(`  Verified: user=${E2E_EMAIL}, role=owner, accountId=ACCT-E2E-TEST, accountType=test`);
 }
 
 function createTestUser() {
@@ -157,7 +158,7 @@ function createTestUser() {
     awsCli(
       `cognito-idp admin-create-user --user-pool-id "${USER_POOL_ID}" --username "${E2E_EMAIL}" ` +
       `--temporary-password "${E2E_PASSWORD}" ` +
-      `--user-attributes Name=email,Value="${E2E_EMAIL}" Name=email_verified,Value=true Name=custom:role,Value=owner Name=custom:accountId,Value=ACCT-E2E-TEST ` +
+      `--user-attributes Name=email,Value="${E2E_EMAIL}" Name=email_verified,Value=true Name=custom:role,Value=owner Name=custom:accountId,Value=ACCT-E2E-TEST Name=custom:accountType,Value=test ` +
       `--message-action SUPPRESS`,
     );
   } catch (err) {
@@ -175,6 +176,40 @@ function createTestUser() {
   );
 
   console.log(`  User created: ${E2E_EMAIL}`);
+}
+
+function seedAccountAndUser() {
+  console.log('Seeding Account and User items...');
+
+  const accountId = 'ACCT-E2E-TEST';
+  const now = new Date().toISOString();
+
+  // Account META item
+  const accountItem = {
+    PK: { S: `ACCOUNT#${accountId}` },
+    SK: { S: 'META' },
+    id: { S: accountId },
+    beneficiaryName: { S: 'E2E Test Beneficiary' },
+    accountType: { S: 'test' },
+    createdAt: { S: now },
+    createdBy: { S: E2E_EMAIL },
+  };
+  dynamoPutItem(accountItem);
+  console.log(`  Seeded Account META: ${accountId} (accountType=test)`);
+
+  // User item
+  const userItem = {
+    PK: { S: `ACCOUNT#${accountId}` },
+    SK: { S: 'USER#e2e-test-user' },
+    userId: { S: 'e2e-test-user' },
+    accountId: { S: accountId },
+    email: { S: E2E_EMAIL },
+    displayName: { S: 'E2E Test User' },
+    role: { S: 'owner' },
+    cognitoSub: { S: 'pending' },
+  };
+  dynamoPutItem(userItem);
+  console.log(`  Seeded User: e2e-test-user (${E2E_EMAIL})`);
 }
 
 function seedExpenses() {
@@ -272,6 +307,7 @@ function main() {
 
   createTestUser();
   verifyCognitoUser();
+  seedAccountAndUser();
   seedExpenses();
   writeGitHubOutput();
 

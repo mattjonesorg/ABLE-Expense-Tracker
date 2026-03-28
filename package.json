@@ -10,6 +10,7 @@
   },
   "devDependencies": {
     "husky": "^9.1.7",
-    "playwright": "^1.58.2"
+    "playwright": "^1.58.2",
+    "ulid": "^2.4.0"
   }
 }
