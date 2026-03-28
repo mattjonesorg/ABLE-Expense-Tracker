@@ -64,6 +64,18 @@ describe('AuthStack', () => {
         ]),
       });
     });
+
+    it('defines custom:accountType as an immutable string attribute in schema', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPool', {
+        Schema: Match.arrayWith([
+          Match.objectLike({
+            Name: 'accountType',
+            AttributeDataType: 'String',
+            Mutable: false,
+          }),
+        ]),
+      });
+    });
   });
 
   describe('App Client', () => {
@@ -110,6 +122,20 @@ describe('AuthStack', () => {
     it('allows clients to read custom:accountId attribute', () => {
       template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
         ReadAttributes: Match.arrayWith(['custom:accountId']),
+      });
+    });
+
+    it('allows clients to read custom:accountType attribute', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        ReadAttributes: Match.arrayWith(['custom:accountType']),
+      });
+    });
+
+    it('does not allow clients to write custom:accountType attribute', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        WriteAttributes: Match.not(
+          Match.arrayWith(['custom:accountType']),
+        ),
       });
     });
   });
