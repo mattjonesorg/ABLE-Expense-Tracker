@@ -25,9 +25,12 @@ export const ABLE_CATEGORIES = [
   'Basic living expenses',
 ] as const;
 
+export type AccountType = 'live' | 'test';
+
 export interface Account {
   id: string;
   beneficiaryName: string;
+  accountType: AccountType;
   createdAt: string;
   createdBy: string;
 }
