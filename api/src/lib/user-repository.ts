@@ -8,22 +8,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { ulid } from 'ulid';
 import type { User } from './types.js';
-
-/** Key attributes stored on DynamoDB items but not part of the User domain model. */
-const KEY_ATTRIBUTES = ['PK', 'SK'] as const;
-
-/**
- * Strip DynamoDB key attributes from a raw item and return a clean User object.
- */
-function itemToUser(item: Record<string, unknown>): User {
-  const clean: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(item)) {
-    if (!(KEY_ATTRIBUTES as readonly string[]).includes(key)) {
-      clean[key] = value;
-    }
-  }
-  return clean as unknown as User;
-}
+import { stripDynamoKeys } from './dynamo-utils.js';
 
 export interface CreateUserInput {
   accountId: string;
@@ -93,7 +78,7 @@ export class UserRepository {
       return null;
     }
 
-    return itemToUser(result.Item as Record<string, unknown>);
+    return stripDynamoKeys<User>(result.Item as Record<string, unknown>, ['PK', 'SK']);
   }
 
   /**
@@ -112,7 +97,7 @@ export class UserRepository {
     );
 
     const items = result.Items ?? [];
-    return items.map((item) => itemToUser(item as Record<string, unknown>));
+    return items.map((item) => stripDynamoKeys<User>(item as Record<string, unknown>, ['PK', 'SK']));
   }
 
   /**

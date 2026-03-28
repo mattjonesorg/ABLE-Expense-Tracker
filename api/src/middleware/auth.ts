@@ -10,6 +10,7 @@ export interface TokenClaims {
   'custom:accountId': string;
   'custom:displayName': string;
   'custom:role': string;
+  // Optional: absent from tokens issued before accountType was introduced. Defaults to 'live' in AuthContext.
   'custom:accountType'?: string;
 }
 
@@ -133,6 +134,7 @@ export function createAuthMiddleware(
         return forbidden('Forbidden');
       }
 
+      // Default to 'live' for backwards compat with tokens that predate the accountType claim
       const accountType = claims['custom:accountType'] === 'test' ? 'test' : 'live';
 
       const context: AuthContext = {

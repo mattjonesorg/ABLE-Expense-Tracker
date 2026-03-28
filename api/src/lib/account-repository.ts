@@ -6,22 +6,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { ulid } from 'ulid';
 import type { Account, AccountType } from './types.js';
-
-/** Key attributes stored on DynamoDB items but not part of the Account domain model. */
-const KEY_ATTRIBUTES = ['PK', 'SK'] as const;
-
-/**
- * Strip DynamoDB key attributes from a raw item and return a clean Account object.
- */
-function itemToAccount(item: Record<string, unknown>): Account {
-  const clean: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(item)) {
-    if (!(KEY_ATTRIBUTES as readonly string[]).includes(key)) {
-      clean[key] = value;
-    }
-  }
-  return clean as unknown as Account;
-}
+import { stripDynamoKeys } from './dynamo-utils.js';
 
 export interface CreateAccountInput {
   beneficiaryName: string;
@@ -91,7 +76,7 @@ export class AccountRepository {
       return null;
     }
 
-    return itemToAccount(result.Item as Record<string, unknown>);
+    return stripDynamoKeys<Account>(result.Item as Record<string, unknown>, ['PK', 'SK']);
   }
 
   /**

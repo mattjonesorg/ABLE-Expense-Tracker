@@ -29,7 +29,7 @@
 
 import { appendFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
+import { ulid } from 'ulid';
 
 const AWS_REGION = requiredEnv('AWS_REGION');
 const USER_POOL_ID = requiredEnv('USER_POOL_ID');
@@ -46,15 +46,6 @@ function requiredEnv(name) {
     process.exit(1);
   }
   return value;
-}
-
-/**
- * Generate a ULID-like ID. Uses timestamp + random bytes for uniqueness.
- */
-function generateId() {
-  const time = Date.now().toString(36).toUpperCase();
-  const rand = randomBytes(10).toString('hex').toUpperCase().slice(0, 16);
-  return `${time}${rand}`;
 }
 
 /**
@@ -132,13 +123,13 @@ function createCognitoUser(accountId) {
     );
   } catch (err) {
     if (err.stderr && err.stderr.includes('UsernameExistsException')) {
-      console.log('  User already exists, updating attributes...');
+      // custom:accountType is immutable in Cognito — already set at creation time, so only update mutable attributes
+      console.log('  User already exists, updating mutable attributes...');
       awsCli(
         `cognito-idp admin-update-user-attributes --user-pool-id "${USER_POOL_ID}" --username "${TEST_EMAIL}" ` +
         `--user-attributes ` +
         `Name=custom:role,Value=owner ` +
-        `Name=custom:accountId,Value="${accountId}" ` +
-        `Name=custom:accountType,Value=test`,
+        `Name=custom:accountId,Value="${accountId}"`,
       );
     } else {
       throw err;
@@ -203,8 +194,8 @@ function main() {
   console.log(`Beneficiary: ${BENEFICIARY_NAME}`);
   console.log('');
 
-  const accountId = generateId();
-  const userId = generateId();
+  const accountId = ulid();
+  const userId = ulid();
 
   createAccountItem(accountId);
   createUserItem(accountId, userId);
