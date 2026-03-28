@@ -153,4 +153,119 @@ describe('AuthStack', () => {
       });
     });
   });
+
+  describe('Ephemeral stacks', () => {
+    let ephemeralTemplate: Template;
+
+    beforeAll(() => {
+      const app = new cdk.App();
+      const stack = new AuthStack(app, 'EphemeralAuthStack', { ephemeral: true });
+      ephemeralTemplate = Template.fromStack(stack);
+    });
+
+    it('does not create Google Identity Provider when ephemeral', () => {
+      const providers = ephemeralTemplate.findResources('AWS::Cognito::UserPoolIdentityProvider');
+      expect(Object.keys(providers)).toHaveLength(0);
+    });
+
+    it('does not create UserPoolDomain when ephemeral', () => {
+      const domains = ephemeralTemplate.findResources('AWS::Cognito::UserPoolDomain');
+      expect(Object.keys(domains)).toHaveLength(0);
+    });
+
+    it('does not include Google in SupportedIdentityProviders when ephemeral', () => {
+      ephemeralTemplate.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        SupportedIdentityProviders: Match.not(
+          Match.arrayWith(['Google']),
+        ),
+      });
+    });
+
+    it('does not include OAuth callback URLs when ephemeral', () => {
+      ephemeralTemplate.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        CallbackURLs: Match.not(
+          Match.arrayWith(['https://d360ri42g0q6k2.cloudfront.net/auth/callback']),
+        ),
+      });
+    });
+  });
+
+  describe('Google Identity Provider', () => {
+    it('creates a Google identity provider with openid, email, profile scopes', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolIdentityProvider', {
+        ProviderType: 'Google',
+        ProviderDetails: Match.objectLike({
+          authorize_scopes: 'openid email profile',
+        }),
+      });
+    });
+
+    it('maps Google email and name attributes', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolIdentityProvider', {
+        ProviderType: 'Google',
+        AttributeMapping: Match.objectLike({
+          email: 'email',
+          name: 'name',
+        }),
+      });
+    });
+  });
+
+  describe('Cognito Domain', () => {
+    it('creates a UserPoolDomain with a cognito domain prefix', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolDomain', {
+        Domain: Match.anyValue(),
+      });
+    });
+
+    it('outputs the Cognito domain URL', () => {
+      template.hasOutput('UserPoolDomainOutput', {
+        Value: Match.anyValue(),
+      });
+    });
+  });
+
+  describe('OAuth Configuration', () => {
+    it('configures authorization code grant flow on the client', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        AllowedOAuthFlows: Match.arrayWith(['code']),
+      });
+    });
+
+    it('includes openid, email, and profile in allowed OAuth scopes', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        AllowedOAuthScopes: Match.arrayWith(['openid', 'email', 'profile']),
+      });
+    });
+
+    it('supports both COGNITO and Google identity providers', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        SupportedIdentityProviders: Match.arrayWith(['COGNITO', 'Google']),
+      });
+    });
+
+    it('includes production and localhost callback URLs', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        CallbackURLs: Match.arrayWith([
+          'https://d360ri42g0q6k2.cloudfront.net/auth/callback',
+          'http://localhost:5173/auth/callback',
+        ]),
+      });
+    });
+
+    it('includes production and localhost logout URLs', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        LogoutURLs: Match.arrayWith([
+          'https://d360ri42g0q6k2.cloudfront.net/login',
+          'http://localhost:5173/login',
+        ]),
+      });
+    });
+
+    it('enables AllowedOAuthFlowsUserPoolClient', () => {
+      template.hasResourceProperties('AWS::Cognito::UserPoolClient', {
+        AllowedOAuthFlowsUserPoolClient: true,
+      });
+    });
+  });
 });
